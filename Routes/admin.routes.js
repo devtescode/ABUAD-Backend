@@ -1,5 +1,6 @@
 const express = require("express")
-const { adminExists, registerAdmin, loginAdmin } = require("../Controllers/admin.controllers")
+const { adminExists, registerAdmin, loginAdmin,  } = require("../Controllers/admin.controllers")
+const { getAllUsers } = require("../Controllers/admin.getallusers")
 // const upload = require("../middleware/upload");
 const router = express.Router()
 
@@ -8,6 +9,7 @@ const router = express.Router()
 router.get("/exists", adminExists)
 router.post("/register", registerAdmin)
 router.post("/login", loginAdmin)
+router.get("/getallusers", getAllUsers)
 
 
 
