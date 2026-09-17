@@ -1,4 +1,3 @@
-const Admin = require("../Models/admin.model");
 const User = require("../Models/user.models");
 
 module.exports.getAllUsers = async (req, res) => {
