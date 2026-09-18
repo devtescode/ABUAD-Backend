@@ -368,8 +368,20 @@ module.exports.getApprovedServices = async (req, res) => {
 
 // Get provider profile
 module.exports.getProviderProfile = async (req, res) => {
+  console.log(
+    "Fetching provider profile for ID:",
+    req.params.id
+  );
+
   try {
     const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Provider ID is required.",
+      });
+    }
 
     const provider = await User.findOne({
       _id: id,
@@ -385,19 +397,39 @@ module.exports.getProviderProfile = async (req, res) => {
       });
     }
 
+    if (provider.status === "suspended") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "This provider is currently unavailable.",
+      });
+    }
+
+    // TEMPORARY: remove status filtering
     const services = await Service.find({
       provider: id,
     }).sort({
       createdAt: -1,
     });
 
+    console.log("=================================");
+    console.log("PROVIDER ID:", id);
+    console.log("PROVIDER:", provider._id);
+    console.log("SERVICES FOUND:", services.length);
+    console.log("SERVICES:", services);
+    console.log("=================================");
+
     return res.status(200).json({
       success: true,
       provider,
       services,
+      reviews: [],
     });
   } catch (error) {
-    console.error("Get provider profile error:", error);
+    console.error(
+      "Get provider profile error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
