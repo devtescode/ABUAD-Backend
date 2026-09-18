@@ -1,5 +1,5 @@
 const express = require("express")
-const { providerservice, getProviderServices, updateProviderService, deleteProviderService } = require("../Controllers/provider.service")
+const { providerservice, getProviderServices, updateProviderService, deleteProviderService, getApprovedServices, getProviderProfile } = require("../Controllers/provider.service")
 const router = express.Router()
 const upload = require("../middleware/upload");
 const { verifyToken } = require("../middleware/auth");
@@ -23,5 +23,14 @@ updateProviderService);
 router.delete( "/services/:id", 
 verifyToken, 
 deleteProviderService);
+
+router.get( "/approved-services",
+verifyToken,
+getApprovedServices );
+
+// Customer views provider profile 
+router.get( "/profile/:id", 
+verifyToken, 
+getProviderProfile );
 
 module.exports = router

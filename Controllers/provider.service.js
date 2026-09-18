@@ -338,3 +338,70 @@ module.exports.deleteProviderService = async (req, res) => {
   }
 };
 
+
+
+// Get all services for customers
+module.exports.getApprovedServices = async (req, res) => {
+  try {
+    const services = await Service.find({})
+      .populate(
+        "provider",
+        "fullName name avatar profileImage categories"
+      )
+      .sort({
+        createdAt: -1,
+      });
+
+    return res.status(200).json({
+      success: true,
+      services,
+    });
+  } catch (error) {
+    console.error("Get all services error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch services.",
+    });
+  }
+};
+
+// Get provider profile
+module.exports. getProviderProfile = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const provider = await User.findOne({
+      _id: id,
+      role: "provider",
+    }).select(
+      "-password -resetPasswordToken -resetPasswordExpires"
+    );
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found.",
+      });
+    }
+
+    const services = await Service.find({
+      provider: id,
+    }).sort({
+      createdAt: -1,
+    });
+
+    return res.status(200).json({
+      success: true,
+      provider,
+      services,
+    });
+  } catch (error) {
+    console.error("Get provider profile error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch provider profile.",
+    });
+  }
+};
