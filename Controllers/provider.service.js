@@ -42,6 +42,15 @@ module.exports.providerservice = async (req, res) => {
       });
     }
 
+    // Suspended providers cannot create services
+    if (provider.status === "suspended") {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Your provider account is suspended. You cannot create a service.",
+      });
+    }
+
     // Validate required fields
     if (
       !title?.trim() ||
@@ -90,7 +99,10 @@ module.exports.providerservice = async (req, res) => {
 
     const uploadedImage = await uploadImage();
 
-    // Save the service in MongoDB
+    /*
+     * Provider has been approved if their account status
+     * is active, so every new service is automatically approved.
+     */
     const service = await Service.create({
       provider: providerId,
       title: title.trim(),
@@ -102,9 +114,10 @@ module.exports.providerservice = async (req, res) => {
       // Save Cloudinary URL
       image: uploadedImage.secure_url,
 
-      // New services require admin approval
-      status: "pending",
+      // Automatically approve services from active providers
+      status: "approved",
     });
+
     console.log("Service created:", service);
 
     return res.status(201).json({
