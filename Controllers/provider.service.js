@@ -14,7 +14,10 @@ module.exports.providerservice = async (req, res) => {
       description,
     } = req.body;
 
-    // verifyToken should attach the decoded user to req.user
+    // ========================================================
+    // CHECK AUTHENTICATION
+    // ========================================================
+
     if (!req.user) {
       return res.status(401).json({
         success: false,
@@ -24,8 +27,12 @@ module.exports.providerservice = async (req, res) => {
 
     const providerId = req.user.id;
 
-    // Find the logged-in provider
+    // ========================================================
+    // FIND LOGGED-IN USER
+    // ========================================================
+
     const provider = await User.findById(providerId);
+    // console.log("Logged-in provider:", provider);
 
     if (!provider) {
       return res.status(404).json({
@@ -34,7 +41,10 @@ module.exports.providerservice = async (req, res) => {
       });
     }
 
-    // Make sure the user is actually a provider
+    // ========================================================
+    // CHECK USER ROLE
+    // ========================================================
+
     if (provider.role !== "provider") {
       return res.status(403).json({
         success: false,
@@ -42,16 +52,56 @@ module.exports.providerservice = async (req, res) => {
       });
     }
 
-    // Suspended providers cannot create services
+    // ========================================================
+    // CHECK PROVIDER ACCOUNT STATUS
+    // ========================================================
+
+    // Pending provider
+    if (provider.status === "pending") {
+      console.log("Provider status pending:", provider.status);
+      return res.status(403).json({
+        success: false,
+        code: "PROVIDER_PENDING",
+        message:
+          "Your provider account is still pending verification. You cannot add services until an administrator approves your account.",
+      });
+    }
+
+    // Rejected provider
+    if (provider.status === "rejected") {
+      console.log("Provider status rejected:", provider.status);
+      return res.status(403).json({
+        success: false,
+        code: "PROVIDER_REJECTED",
+        message:
+          "Your provider application was rejected. You cannot add services. Please contact the administrator for more information.",
+      });
+    }
+
+    // Suspended provider
     if (provider.status === "suspended") {
       return res.status(403).json({
         success: false,
+        code: "PROVIDER_SUSPENDED",
         message:
           "Your provider account is suspended. You cannot create a service.",
       });
     }
 
-    // Validate required fields
+    // Only approved providers can create services
+    if (provider.status !== "active") {
+      return res.status(403).json({
+        success: false,
+        code: "PROVIDER_NOT_APPROVED",
+        message:
+          "Your provider account has not been approved yet. You cannot create services.",
+      });
+    }
+
+    // ========================================================
+    // VALIDATE REQUIRED FIELDS
+    // ========================================================
+
     if (
       !title?.trim() ||
       !category ||
@@ -65,7 +115,24 @@ module.exports.providerservice = async (req, res) => {
       });
     }
 
-    // Make sure an image was uploaded
+    // ========================================================
+    // VALIDATE PRICE
+    // ========================================================
+
+    const servicePrice = Number(price);
+
+    if (Number.isNaN(servicePrice) || servicePrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid service price.",
+        field: "price",
+      });
+    }
+
+    // ========================================================
+    // CHECK SERVICE IMAGE
+    // ========================================================
+
     if (!req.file) {
       return res.status(400).json({
         success: false,
@@ -73,10 +140,10 @@ module.exports.providerservice = async (req, res) => {
       });
     }
 
-    /*
-     * Upload the image stored in Multer memory
-     * directly to Cloudinary.
-     */
+    // ========================================================
+    // UPLOAD IMAGE TO CLOUDINARY
+    // ========================================================
+
     const uploadImage = () => {
       return new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
@@ -99,34 +166,47 @@ module.exports.providerservice = async (req, res) => {
 
     const uploadedImage = await uploadImage();
 
-    /*
-     * Provider has been approved if their account status
-     * is active, so every new service is automatically approved.
-     */
+    // ========================================================
+    // CREATE SERVICE
+    // ========================================================
+
     const service = await Service.create({
       provider: providerId,
+
       title: title.trim(),
+
       category,
-      price: Number(price),
+
+      price: servicePrice,
+
       duration: duration.trim(),
+
       description: description.trim(),
 
-      // Save Cloudinary URL
+      // Cloudinary image URL
       image: uploadedImage.secure_url,
 
-      // Automatically approve services from active providers
+      // Approved providers' services are automatically approved
       status: "approved",
     });
 
-    console.log("Service created:", service);
+    console.log("Service created:", service._id);
+
+    // ========================================================
+    // SUCCESS RESPONSE
+    // ========================================================
 
     return res.status(201).json({
       success: true,
       message: "Service created successfully.",
       service,
     });
+
   } catch (error) {
-    console.error("Create service error:", error);
+    console.error(
+      "Create service error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
