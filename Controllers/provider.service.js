@@ -367,7 +367,7 @@ module.exports.getApprovedServices = async (req, res) => {
 };
 
 // Get provider profile
-module.exports. getProviderProfile = async (req, res) => {
+module.exports.getProviderProfile = async (req, res) => {
   try {
     const { id } = req.params;
 
