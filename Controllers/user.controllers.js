@@ -68,7 +68,6 @@ module.exports.usersignup = async (req, res) => {
             role,
         } = req.body;
 
-
         // ========================================================
         // VALIDATE REQUIRED FIELDS
         // ========================================================
@@ -87,7 +86,6 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
         // VALIDATE ROLE
         // Only customer and provider can register publicly
@@ -98,7 +96,6 @@ module.exports.usersignup = async (req, res) => {
                 message: "Invalid account role",
             });
         }
-
 
         // ========================================================
         // VALIDATE GENDER
@@ -113,7 +110,6 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
         // VALIDATE PASSWORD
         // ========================================================
@@ -125,12 +121,10 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
         // NORMALIZE NAME
         // ========================================================
         const normalizedName = name.trim();
-
 
         if (normalizedName.length < 2) {
             return res.status(400).json({
@@ -140,12 +134,10 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
         // NORMALIZE EMAIL
         // ========================================================
         const normalizedEmail = email.trim().toLowerCase();
-
 
         // ========================================================
         // NORMALIZE MATRIC NUMBER
@@ -154,7 +146,6 @@ module.exports.usersignup = async (req, res) => {
             .trim()
             .toUpperCase();
 
-
         // ========================================================
         // NORMALIZE PHONE NUMBER
         // ========================================================
@@ -162,18 +153,15 @@ module.exports.usersignup = async (req, res) => {
             .trim()
             .replace(/\D/g, "");
 
-
         // Remove +234 / 234 prefix
         if (normalizedPhone.startsWith("234")) {
             normalizedPhone = normalizedPhone.substring(3);
         }
 
-
         // Remove leading 0
         if (normalizedPhone.startsWith("0")) {
             normalizedPhone = normalizedPhone.substring(1);
         }
-
 
         // ========================================================
         // VALIDATE NIGERIAN PHONE NUMBER
@@ -186,10 +174,8 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // Store phone number as +234XXXXXXXXXX
         normalizedPhone = `+234${normalizedPhone}`;
-
 
         // ========================================================
         // CHECK IF EMAIL ALREADY EXISTS
@@ -206,7 +192,6 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
         // CHECK IF MATRIC NUMBER ALREADY EXISTS
         // ========================================================
@@ -221,7 +206,6 @@ module.exports.usersignup = async (req, res) => {
                 field: "matricNo",
             });
         }
-
 
         // ========================================================
         // CHECK IF PHONE NUMBER ALREADY EXISTS
@@ -238,18 +222,20 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
         // ACCOUNT STATUS
         //
-        // Customer → active
-        // Provider → pending
+        // NEW CUSTOMER  → active
+        // NEW PROVIDER  → pending
+        //
+        // This is automatically assigned by the backend.
+        // The frontend cannot choose the status.
         // ========================================================
-        const status =
-            role === "provider"
-                ? "pending"
-                : "active";
+        let status = "active";
 
+        if (role === "provider") {
+            status = "pending";
+        }
 
         // ========================================================
         // CREATE USER
@@ -268,30 +254,35 @@ module.exports.usersignup = async (req, res) => {
             status,
         });
 
-
-        console.log("User created:", user._id);
-
+        console.log(
+            `New ${role} account created:`,
+            user._id,
+            `Status: ${status}`
+        );
 
         // ========================================================
-        // IMPORTANT:
+        // SIGNUP SUCCESS RESPONSE
         //
-        // DO NOT GENERATE TOKEN HERE.
-        //
-        // Signup only creates the account.
-        // The user must login separately.
+        // No token is generated here.
+        // User must login separately.
         // ========================================================
-
         return res.status(201).json({
             success: true,
             message:
                 role === "provider"
-                    ? "Provider account created successfully. Please login to continue."
+                    ? "Provider account created successfully. Your account is pending verification. Please login to continue."
                     : "Customer account created successfully. Please login to continue.",
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                status: user.status,
+            },
         });
 
     } catch (error) {
         console.error("Signup error:", error);
-
 
         // ========================================================
         // HANDLE DUPLICATE MONGODB INDEX
@@ -300,7 +291,6 @@ module.exports.usersignup = async (req, res) => {
             const field =
                 Object.keys(error.keyPattern || {})[0];
 
-
             return res.status(409).json({
                 success: false,
                 message: `${field || "Information"} is already registered`,
@@ -308,14 +298,12 @@ module.exports.usersignup = async (req, res) => {
             });
         }
 
-
         // ========================================================
-        // MONGOOSE VALIDATION ERROR
+        // HANDLE MONGOOSE VALIDATION ERROR
         // ========================================================
         if (error.name === "ValidationError") {
             const firstError =
                 Object.values(error.errors)[0];
-
 
             return res.status(400).json({
                 success: false,
@@ -324,7 +312,6 @@ module.exports.usersignup = async (req, res) => {
                     "Invalid user information",
             });
         }
-
 
         // ========================================================
         // SERVER ERROR

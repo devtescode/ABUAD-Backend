@@ -6,6 +6,7 @@ const cors = require('cors');
 const userRoutes = require('./Routes/user.routes');
 const adminRoutes = require('./Routes/admin.routes');
 const providerRoutes = require('./Routes/provider.routes');
+const verificationRoutes = require('./Routes/verification.routes');
 // const adminRoutes = require('./Routes/user.adminRoutes');
 // const paystackroute = require('./Controllers/paystackWebhook');
 
@@ -38,6 +39,7 @@ mongoose
 app.use('/usercreative', userRoutes);
 app.use('/admin', adminRoutes);
 app.use('/provider', providerRoutes);
+app.use('/verification', verificationRoutes);
 
 
 // app.use(
