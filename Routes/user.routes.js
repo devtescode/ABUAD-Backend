@@ -2,7 +2,7 @@ const express = require("express")
 const { usersignup, login } = require("../Controllers/user.controllers")
 const { updateProviderProfile } = require("../Controllers/provider.profile")
 const router = express.Router()
-// const upload = require("../middleware/upload");
+const upload = require("../middleware/upload");
 const { verifyToken } = require("../middleware/auth");
 
 

@@ -81,11 +81,11 @@ const Userschema = new mongoose.Schema(
             default: "",
         },
 
-        startingPrice: {
-            type: Number,
-            min: [0, "Starting price cannot be negative"],
-            default: 0,
-        },
+        // startingPrice: {
+        //     type: Number,
+        //     min: [0, "Starting price cannot be negative"],
+        //     default: 0,
+        // },
     },
     {
         timestamps: true,

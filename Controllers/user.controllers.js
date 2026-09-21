@@ -38,6 +38,9 @@ const sanitizeUser = (user) => {
         gender: user.gender,
         role: user.role,
         status: user.status,
+        avatar: user.avatar,
+        about: user.about,
+        location: user.location,
     };
 };
 
