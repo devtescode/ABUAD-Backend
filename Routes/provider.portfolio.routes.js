@@ -30,7 +30,7 @@ router.get(
   "/provider/:providerId",
   verifyToken,
   getProviderPortfolio
-);
+);  
 
 // ========================================================
 // ADD PORTFOLIO WORK

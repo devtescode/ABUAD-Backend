@@ -59,6 +59,33 @@ const Userschema = new mongoose.Schema(
             enum: ["active", "pending", "suspended", "rejected",],
             default: "active",
         },
+          // =========================
+        // PROVIDER PROFILE
+        // =========================
+
+        avatar: {
+            type: String,
+            default: "",
+        },
+
+        about: {
+            type: String,
+            trim: true,
+            maxlength: [500, "About section cannot exceed 500 characters"],
+            default: "",
+        },
+
+        location: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        startingPrice: {
+            type: Number,
+            min: [0, "Starting price cannot be negative"],
+            default: 0,
+        },
     },
     {
         timestamps: true,
