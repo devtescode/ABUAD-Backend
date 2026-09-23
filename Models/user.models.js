@@ -86,6 +86,16 @@ const Userschema = new mongoose.Schema(
         //     min: [0, "Starting price cannot be negative"],
         //     default: 0,
         // },
+         // -----------------------------------------
+        // SAVED PROVIDERS
+        // -----------------------------------------
+
+        savedProviders: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+            },
+        ],
     },
     {
         timestamps: true,
