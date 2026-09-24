@@ -1,5 +1,6 @@
 const express = require("express")
 const { providerservice, getProviderServices, updateProviderService, deleteProviderService, getApprovedServices, getProviderProfile } = require("../Controllers/provider.service")
+const { getProviderAvailability, updateProviderAvailability, } = require("../Controllers/provider.avaliability");
 const router = express.Router()
 const upload = require("../middleware/upload");
 const { verifyToken } = require("../middleware/auth");
@@ -32,5 +33,20 @@ getApprovedServices );
 router.get( "/profile/:id", 
 verifyToken, 
 getProviderProfile );
+
+
+router.get(
+    "/provider/availability",
+    verifyToken,
+    getProviderAvailability
+);
+
+router.put(
+    "/provider/availability",
+    verifyToken,
+    updateProviderAvailability
+);
+
+
 
 module.exports = router

@@ -8,6 +8,7 @@ const adminRoutes = require('./Routes/admin.routes');
 const providerRoutes = require('./Routes/provider.routes');
 const verificationRoutes = require('./Routes/verification.routes');
 const portfolioRoutes = require('./Routes/provider.portfolio.routes');
+const availabilityRoutes = require('./Routes/availability.routes');
 // const adminRoutes = require('./Routes/user.adminRoutes');
 // const paystackroute = require('./Controllers/paystackWebhook');
 
@@ -42,8 +43,7 @@ app.use('/admin', adminRoutes);
 app.use('/provider', providerRoutes);
 app.use('/verification', verificationRoutes);
 app.use('/portfolio', portfolioRoutes);
-
-
+app.use('/availability', availabilityRoutes)
 // app.use(
 //   "/api/paystack",
 //   express.raw({ type: "application/json" }), // IMPORTANT: only JSON

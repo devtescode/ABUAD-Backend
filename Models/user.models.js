@@ -59,7 +59,7 @@ const Userschema = new mongoose.Schema(
             enum: ["active", "pending", "suspended", "rejected",],
             default: "active",
         },
-          // =========================
+        // =========================
         // PROVIDER PROFILE
         // =========================
 
@@ -81,12 +81,96 @@ const Userschema = new mongoose.Schema(
             default: "",
         },
 
+        // =========================
+        // PROVIDER AVAILABILITY
+        // =========================
+
+        availability: {
+            type: [
+                {
+                    day: {
+                        type: String,
+                        enum: [
+                            "Monday",
+                            "Tuesday",
+                            "Wednesday",
+                            "Thursday",
+                            "Friday",
+                            "Saturday",
+                            "Sunday",
+                        ],
+                        required: true,
+                    },
+
+                    available: {
+                        type: Boolean,
+                        default: false,
+                    },
+
+                    start: {
+                        type: String,
+                        default: "08:00",
+                    },
+
+                    end: {
+                        type: String,
+                        default: "18:00",
+                    },
+                },
+            ],
+            default: [
+                {
+                    day: "Monday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+                {
+                    day: "Tuesday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+                {
+                    day: "Wednesday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+                {
+                    day: "Thursday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+                {
+                    day: "Friday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+                {
+                    day: "Saturday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+                {
+                    day: "Sunday",
+                    available: false,
+                    start: "08:00",
+                    end: "18:00",
+                },
+            ],
+        },
+
+
         // startingPrice: {
         //     type: Number,
         //     min: [0, "Starting price cannot be negative"],
         //     default: 0,
         // },
-         // -----------------------------------------
+        // -----------------------------------------
         // SAVED PROVIDERS
         // -----------------------------------------
 
