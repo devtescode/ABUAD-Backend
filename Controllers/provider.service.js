@@ -461,10 +461,6 @@ module.exports.getApprovedServices = async (req, res) => {
 
 // Get provider profile
 module.exports.getProviderProfile = async (req, res) => {
-  console.log(
-    "Fetching provider profile for ID:",
-    req.params.id
-  );
 
   try {
     const { id } = req.params;
@@ -529,4 +525,55 @@ module.exports.getProviderProfile = async (req, res) => {
       message: "Failed to fetch provider profile.",
     });
   }
+};
+
+// controllers/providerController.js
+
+
+module.exports.geteachProviderProfile = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        if (!id) {
+            return res.status(400).json({
+                success: false,
+                message: "Provider ID is required",
+            });
+        }
+
+        const provider = await User.findById(id).select(
+            "name email avatar about location status role createdAt availability"
+        );
+
+        if (!provider) {
+            return res.status(404).json({
+                success: false,
+                message: "Provider not found",
+            });
+        }
+
+        if (provider.role !== "provider") {
+            return res.status(400).json({
+                success: false,
+                message: "The selected user is not a provider",
+            });
+        }
+
+        const services = await Service.find({
+            provider: provider._id,
+        }).sort({ createdAt: -1 });
+
+        return res.status(200).json({
+            success: true,
+            provider,
+            services,
+        });
+    } catch (error) {
+        console.error("Get provider profile error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch provider profile",
+        });
+    }
 };

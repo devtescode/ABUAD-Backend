@@ -1,5 +1,5 @@
 const express = require("express")
-const { providerservice, getProviderServices, updateProviderService, deleteProviderService, getApprovedServices, getProviderProfile } = require("../Controllers/provider.service")
+const { providerservice, getProviderServices, updateProviderService, deleteProviderService, getApprovedServices, getProviderProfile, geteachProviderProfile } = require("../Controllers/provider.service")
 const { getProviderAvailability, updateProviderAvailability, } = require("../Controllers/provider.avaliability");
 const router = express.Router()
 const upload = require("../middleware/upload");
@@ -33,6 +33,9 @@ getApprovedServices );
 router.get( "/profile/:id", 
 verifyToken, 
 getProviderProfile );
+
+
+router.get("/eachprofile/:id", geteachProviderProfile)
 
 
 router.get(
