@@ -180,10 +180,40 @@ const Userschema = new mongoose.Schema(
                 ref: "User",
             },
         ],
+
+        paystack: {
+            subaccountCode: {
+                type: String,
+                default: null,
+            },
+
+            accountName: {
+                type: String,
+                default: null,
+            },
+
+            accountNumber: {
+                type: String,
+                default: null,
+            },
+
+            bankCode: {
+                type: String,
+                default: null,
+            },
+
+            bankName: {
+                type: String,
+                default: null,
+            },
+
+            isVerified: {
+                type: Boolean,
+                default: false,
+            },
+        },
     },
-    {
-        timestamps: true,
-    }
+    {timestamps: true}
 );
 
 Userschema.pre("save", async function () {

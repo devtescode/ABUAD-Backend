@@ -545,7 +545,7 @@ module.exports.geteachProviderProfile = async (req, res) => {
             "name email avatar about location status role createdAt availability"
         );
 
-        if (!provider) {
+        if (!provider ) {
             return res.status(404).json({
                 success: false,
                 message: "Provider not found",
