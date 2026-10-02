@@ -534,21 +534,35 @@ module.exports.paystackWebhook =
       }
 
       const expectedSubaccount =
-        provider.paystack
-          ?.subaccountCode;
+        provider.paystack?.subaccountCode;
+
+      const webhookSubaccounts =
+        payment.split?.shares?.subaccounts || [];
+
+      const matchingSubaccount =
+        webhookSubaccounts.some(
+          (item) =>
+            item.subaccount_code ===
+            expectedSubaccount
+        );
 
       if (
-        payment.subaccount &&
         expectedSubaccount &&
-        payment.subaccount !==
-        expectedSubaccount
+        webhookSubaccounts.length > 0 &&
+        !matchingSubaccount
       ) {
         console.error(
-          "SUBACCOUNT MISMATCH"
+          "SUBACCOUNT MISMATCH:",
+          {
+            expected: expectedSubaccount,
+            received: webhookSubaccounts,
+          }
         );
 
         return res.sendStatus(200);
       }
+
+     
 
       // ==========================================
       // SAVE PAYMENT
