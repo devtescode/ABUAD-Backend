@@ -248,7 +248,15 @@ module.exports.initializePayment =
 
       // ==========================================
       // PAYSTACK
-      // ==========================================
+      // ==============
+      // ============================
+
+      console.log("PROVIDER PAYSTACK DATA:", {
+        providerId: provider._id,
+        providerName: provider.name,
+        subaccountCode: provider.paystack?.subaccountCode,
+        isVerified: provider.paystack?.isVerified,
+      });
 
       const response =
         await paystack.post(
@@ -320,11 +328,12 @@ module.exports.initializePayment =
           response.data.data
             .reference,
       });
+
     } catch (error) {
       console.error(
         "PAYSTACK INITIALIZATION ERROR:",
         error.response?.data ||
-          error
+        error
       );
 
       return res.status(500).json({
@@ -350,7 +359,7 @@ module.exports.paystackWebhook =
 
       const signature =
         req.headers[
-          "x-paystack-signature"
+        "x-paystack-signature"
         ];
 
       if (!signature) {
@@ -388,7 +397,7 @@ module.exports.paystackWebhook =
 
       if (
         signatureBuffer.length !==
-          hashBuffer.length ||
+        hashBuffer.length ||
         !crypto.timingSafeEqual(
           signatureBuffer,
           hashBuffer
@@ -516,7 +525,7 @@ module.exports.paystackWebhook =
         payment.subaccount &&
         expectedSubaccount &&
         payment.subaccount !==
-          expectedSubaccount
+        expectedSubaccount
       ) {
         console.error(
           "SUBACCOUNT MISMATCH"
@@ -562,8 +571,8 @@ module.exports.paystackWebhook =
         paidAt:
           payment.paid_at
             ? new Date(
-                payment.paid_at
-              )
+              payment.paid_at
+            )
             : new Date(),
       };
 
@@ -642,7 +651,7 @@ module.exports.verifyPayment =
         String(
           booking.customer._id
         ) !==
-          String(customerId)
+        String(customerId)
       ) {
         return res.status(403).json({
           success: false,
@@ -753,8 +762,8 @@ module.exports.verifyPayment =
         paidAt:
           payment.paid_at
             ? new Date(
-                payment.paid_at
-              )
+              payment.paid_at
+            )
             : new Date(),
       };
 
@@ -799,7 +808,7 @@ module.exports.verifyPayment =
       console.error(
         "PAYSTACK VERIFY ERROR:",
         error.response?.data ||
-          error
+        error
       );
 
       return res.status(500).json({
