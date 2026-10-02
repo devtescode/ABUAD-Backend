@@ -258,6 +258,23 @@ module.exports.initializePayment =
         isVerified: provider.paystack?.isVerified,
       });
 
+      // TEMPORARY SUBACCOUNT CHECK
+      try {
+        const subaccountTest = await paystack.get(
+          `/subaccount/${encodeURIComponent(subaccountCode)}`
+        );
+
+        console.log(
+          "PAYSTACK SUBACCOUNT CHECK:",
+          subaccountTest.data
+        );
+      } catch (error) {
+        console.error(
+          "PAYSTACK SUBACCOUNT CHECK ERROR:",
+          error.response?.data || error.message
+        );
+      }
+
       const response =
         await paystack.post(
           "/transaction/initialize",
