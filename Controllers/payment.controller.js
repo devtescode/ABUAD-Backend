@@ -269,9 +269,8 @@ module.exports.initializePayment =
             reference,
 
             callback_url:
-              process.env
-                .PAYSTACK_CALLBACK_URL ||
-              "http://localhost:5173/payment/verify",
+              process.env.PAYSTACK_CALLBACK_URL ||
+              "https://servicely-ng.vercel.app/payment/verify",
 
             subaccount:
               subaccountCode,
