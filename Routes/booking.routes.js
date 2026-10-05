@@ -26,4 +26,9 @@ router.get(
   bookingController.getCustomerBookings
 );
 
+router.get(
+  "/provider-bookings",
+  verifyToken,
+  bookingController.getProviderBookings
+);
 module.exports = router;

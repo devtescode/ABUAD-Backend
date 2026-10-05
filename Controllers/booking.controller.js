@@ -463,3 +463,150 @@ module.exports.getCustomerBookings = async (req, res) => {
     });
   }
 };
+
+module.exports.getProviderBookings = async (req, res) => {
+  try {
+    const providerId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!providerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const bookings = await Booking.find({
+      provider: providerId,
+    })
+      .populate(
+        "customer",
+        "name email avatar profileImage phoneNumber gender"
+      )
+      .populate(
+        "provider",
+        "name email avatar profileImage"
+      )
+      .populate(
+        "service",
+        "title category price duration description image"
+      )
+      .sort({ createdAt: -1 });
+
+    const formattedBookings = bookings.map((booking) => {
+      const customer = booking.customer || {};
+      const provider = booking.provider || {};
+      const service = booking.service || {};
+
+      return {
+        id: String(booking._id),
+
+        // EXACT SERVICE BOOKED
+        serviceId: service?._id
+          ? String(service._id)
+          : String(booking.service || ""),
+
+        serviceName:
+          service.title ||
+          service.name ||
+          "Service",
+
+        // IMAGE OF THE SERVICE THE CUSTOMER BOOKED
+        serviceImage:
+          service.image || "",
+
+        providerId: provider?._id
+          ? String(provider._id)
+          : String(booking.provider || ""),
+
+        providerName:
+          provider.name ||
+          "Provider",
+
+        providerAvatar:
+          provider.avatar ||
+          provider.profileImage ||
+          "",
+
+        customerId: customer?._id
+          ? String(customer._id)
+          : String(booking.customer || ""),
+
+        customerName:
+          customer.name ||
+          "Customer",
+
+        customerEmail:
+          customer.email ||
+          "",
+
+        customerAvatar:
+          customer.avatar ||
+          customer.profileImage ||
+          "",
+
+        customerPhone:
+          customer.phoneNumber ||
+          "",
+        customerGender:
+          customer.gender ||
+          "",
+
+        date: booking.date,
+
+        time: booking.time,
+
+        location:
+          booking.location || "",
+
+        price:
+          Number(booking.amount) || 0,
+
+        notes:
+          booking.note || "",
+
+        status:
+          booking.status || "pending",
+
+        paymentStatus:
+          booking.paymentStatus || "unpaid",
+
+        paymentReference:
+          booking.paymentReference || null,
+
+        platformFee:
+          Number(booking.platformFee) || 0,
+
+        providerAmount:
+          Number(booking.providerAmount) || 0,
+
+        createdAt:
+          booking.createdAt,
+
+        updatedAt:
+          booking.updatedAt,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      bookings: formattedBookings,
+      count: formattedBookings.length,
+    });
+  } catch (error) {
+    console.error(
+      "GET PROVIDER BOOKINGS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to load provider bookings.",
+    });
+  }
+};
