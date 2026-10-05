@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const {getProviderAccount, getPaystackBanks, setupProviderAccount} = require("../Controllers/providerAccountRoutes.controllers");
+const {getProviderAccount, getPaystackBanks, setupProviderAccount, refreshProviderPaystackStatus} = require("../Controllers/providerAccountRoutes.controllers");
 const { verifyToken } = require("../middleware/auth");
 
 router.get(
@@ -20,6 +20,12 @@ router.post(
   "/account",
   verifyToken,
   setupProviderAccount
+);
+
+router.get(
+  "/refresh-paystack-status",
+  verifyToken,
+  refreshProviderPaystackStatus
 );
 
 module.exports = router

@@ -1064,3 +1064,240 @@ module.exports.setupProviderAccount = async (
   }
 };
 
+module.exports.refreshProviderPaystackStatus =
+  async (req, res) => {
+    try {
+      const providerId =
+        getAuthenticatedUserId(req);
+
+      if (!providerId) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Authentication failed.",
+        });
+      }
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          providerId
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid provider ID.",
+        });
+      }
+
+      const provider =
+        await User.findById(providerId);
+
+      if (!provider) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Provider not found.",
+        });
+      }
+
+      if (provider.role !== "provider") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Only providers can refresh payment status.",
+        });
+      }
+
+      const subaccountCode =
+        provider.paystack?.subaccountCode;
+
+      if (!subaccountCode) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No Paystack subaccount is connected to this provider.",
+        });
+      }
+
+      console.log(
+        "REFRESHING PAYSTACK SUBACCOUNT:",
+        {
+          providerId:
+            String(provider._id),
+
+          providerName:
+            provider.name,
+
+          subaccountCode,
+        }
+      );
+
+      let paystackResponse;
+
+      try {
+        paystackResponse =
+          await axios.get(
+            `${PAYSTACK_BASE_URL}/subaccount/${encodeURIComponent(
+              subaccountCode
+            )}`,
+            {
+              headers:
+                paystackHeaders,
+            }
+          );
+      } catch (error) {
+        console.error(
+          "PAYSTACK REFRESH ERROR:",
+          error.response?.data ||
+            error.message
+        );
+
+        return res.status(400).json({
+          success: false,
+          message:
+            error.response?.data?.message ||
+            "Unable to retrieve Paystack subaccount.",
+        });
+      }
+
+      if (
+        !paystackResponse.data?.status ||
+        !paystackResponse.data?.data
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            paystackResponse.data?.message ||
+            "Unable to retrieve Paystack subaccount status.",
+        });
+      }
+
+      const paystackData =
+        paystackResponse.data.data;
+
+      const isVerified =
+        Boolean(
+          paystackData.is_verified
+        );
+
+      const isActive =
+        Boolean(
+          paystackData.active
+        );
+
+      console.log(
+        "PAYSTACK CURRENT STATUS:",
+        {
+          subaccountCode:
+            paystackData.subaccount_code,
+
+          isVerified,
+
+          isActive,
+
+          accountName:
+            paystackData.account_name,
+
+          settlementBank:
+            paystackData.settlement_bank,
+
+          accountNumber:
+            paystackData.account_number,
+        }
+      );
+
+      /**
+       * Update MongoDB with Paystack's
+       * actual current status.
+       */
+      provider.paystack = {
+        ...(provider.paystack || {}),
+
+        accountName:
+          paystackData.account_name ||
+          provider.paystack?.accountName,
+
+        accountNumber:
+          paystackData.account_number ||
+          provider.paystack?.accountNumber,
+
+        bankCode:
+          provider.paystack?.bankCode,
+
+        bankName:
+          paystackData.settlement_bank ||
+          provider.paystack?.bankName,
+
+        subaccountCode:
+          paystackData.subaccount_code ||
+          subaccountCode,
+
+        isVerified,
+      };
+
+      await provider.save();
+
+      console.log(
+        "PROVIDER PAYSTACK STATUS UPDATED:",
+        {
+          providerId:
+            String(provider._id),
+
+          subaccountCode:
+            provider.paystack
+              .subaccountCode,
+
+          isVerified:
+            provider.paystack
+              .isVerified,
+        }
+      );
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          isVerified
+            ? "Paystack account is verified."
+            : "Paystack account is not yet verified.",
+
+        account: {
+          subaccountCode:
+            provider.paystack
+              .subaccountCode,
+
+          isVerified,
+
+          active: isActive,
+
+          accountName:
+            paystackData.account_name ||
+            provider.paystack?.accountName,
+
+          accountNumber:
+            paystackData.account_number ||
+            provider.paystack?.accountNumber,
+
+          bankName:
+            paystackData.settlement_bank ||
+            provider.paystack?.bankName,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "REFRESH PROVIDER PAYSTACK STATUS ERROR:",
+        error.response?.data ||
+          error.message ||
+          error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.response?.data?.message ||
+          error.message ||
+          "Unable to refresh Paystack status.",
+      });
+    }
+  };
