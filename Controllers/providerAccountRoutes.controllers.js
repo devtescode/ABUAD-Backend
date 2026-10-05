@@ -247,6 +247,7 @@ module.exports.getPaystackBanks = async (
  * → Always use Paystack's real status
  * --------------------------------------------------
  */
+
 module.exports.setupProviderAccount = async (
   req,
   res
@@ -390,13 +391,6 @@ module.exports.setupProviderAccount = async (
      * --------------------------------------------------
      * 6. RESOLVE BANK ACCOUNT
      * --------------------------------------------------
-     *
-     * This confirms that:
-     *
-     * Bank + Account Number
-     *
-     * actually exists and returns the real
-     * account name.
      */
 
     let resolveResponse;
@@ -479,7 +473,7 @@ module.exports.setupProviderAccount = async (
 
     /**
      * --------------------------------------------------
-     * 7. EXISTING PAYSTACK ACCOUNT
+     * 7. EXISTING PAYSTACK DATA
      * --------------------------------------------------
      */
 
@@ -487,8 +481,10 @@ module.exports.setupProviderAccount = async (
       provider.paystack || {};
 
     const existingSubaccountCode =
-      existingPaystack.subaccountCode ||
-      null;
+      String(
+        existingPaystack.subaccountCode ||
+          ""
+      ).trim();
 
     const existingAccountNumber =
       String(
@@ -505,59 +501,28 @@ module.exports.setupProviderAccount = async (
 
     /**
      * --------------------------------------------------
-     * 8. CHECK IF SAME ACCOUNT
+     * 8. CHECK EXISTING SUBACCOUNT ON PAYSTACK
      * --------------------------------------------------
      *
-     * IMPORTANT:
+     * This is the important fix.
      *
-     * We compare BOTH:
+     * MongoDB may contain an old ACCT_ code that
+     * no longer exists on Paystack.
      *
-     * - Bank code
-     * - Account number
-     *
-     * This prevents a false match where the same
-     * account number somehow exists under another bank.
+     * We verify the code before attempting to use it.
      */
 
-    const sameAccountDetails =
-      Boolean(existingSubaccountCode) &&
-      existingAccountNumber ===
-        cleanAccountNumber &&
-      existingBankCode ===
-        cleanBankCode;
+    let existingSubaccount = null;
+    let existingSubaccountExists = false;
 
-    /**
-     * --------------------------------------------------
-     * 9. SAME ACCOUNT
-     * --------------------------------------------------
-     *
-     * If the provider submits exactly the same
-     * bank/account details:
-     *
-     * DO NOT UPDATE PAYSTACK.
-     *
-     * DO NOT CREATE A NEW SUBACCOUNT.
-     */
-
-    if (sameAccountDetails) {
+    if (existingSubaccountCode) {
       console.log(
-        "SAME PAYSTACK ACCOUNT DETAILS."
+        "CHECKING EXISTING PAYSTACK SUBACCOUNT:",
+        existingSubaccountCode
       );
 
-      console.log(
-        "NO PAYSTACK UPDATE REQUIRED."
-      );
-
-      let currentIsVerified =
-        Boolean(
-          existingPaystack.isVerified
-        );
-
-      /**
-       * Fetch the current real Paystack status.
-       */
       try {
-        const statusResponse =
+        const existingResponse =
           await axios.get(
             `${PAYSTACK_BASE_URL}/subaccount/${encodeURIComponent(
               existingSubaccountCode
@@ -569,27 +534,81 @@ module.exports.setupProviderAccount = async (
           );
 
         if (
-          statusResponse.data?.status &&
-          statusResponse.data?.data
+          existingResponse.data?.status &&
+          existingResponse.data?.data
         ) {
-          const currentData =
-            statusResponse.data.data;
+          existingSubaccount =
+            existingResponse.data.data;
 
-          currentIsVerified =
-            Boolean(
-              currentData.is_verified
-            );
+          existingSubaccountExists = true;
+
+          console.log(
+            "EXISTING PAYSTACK SUBACCOUNT FOUND:",
+            {
+              subaccountCode:
+                existingSubaccount
+                  .subaccount_code,
+
+              active:
+                existingSubaccount.active,
+
+              isVerified:
+                existingSubaccount.is_verified,
+            }
+          );
         }
       } catch (error) {
         console.error(
-          "Unable to refresh Paystack status:",
+          "EXISTING PAYSTACK SUBACCOUNT CHECK ERROR:",
           error.response?.data ||
             error.message
         );
+
+        /**
+         * IMPORTANT:
+         *
+         * If Paystack says "Subaccount not found",
+         * we do NOT keep using the stale code.
+         *
+         * We will create a new subaccount below.
+         */
+
+        existingSubaccountExists = false;
+        existingSubaccount = null;
       }
+    }
+
+    /**
+     * --------------------------------------------------
+     * 9. SAME ACCOUNT + VALID SUBACCOUNT
+     * --------------------------------------------------
+     */
+
+    const sameAccountDetails =
+      Boolean(existingSubaccountCode) &&
+      existingAccountNumber ===
+        cleanAccountNumber &&
+      existingBankCode ===
+        cleanBankCode;
+
+    if (
+      sameAccountDetails &&
+      existingSubaccountExists
+    ) {
+      console.log(
+        "SAME BANK ACCOUNT AND VALID PAYSTACK SUBACCOUNT."
+      );
 
       /**
-       * Keep local database synchronized.
+       * Use Paystack's REAL verification status.
+       */
+      const currentIsVerified =
+        Boolean(
+          existingSubaccount?.is_verified
+        );
+
+      /**
+       * Keep MongoDB synchronized.
        */
       provider.paystack = {
         ...(provider.paystack || {}),
@@ -616,7 +635,7 @@ module.exports.setupProviderAccount = async (
       await provider.save();
 
       console.log(
-        "EXISTING SUBACCOUNT KEPT:",
+        "EXISTING VALID SUBACCOUNT KEPT:",
         existingSubaccountCode
       );
 
@@ -654,24 +673,22 @@ module.exports.setupProviderAccount = async (
 
     /**
      * --------------------------------------------------
-     * 10. DIFFERENT ACCOUNT
+     * 10. EXISTING SUBACCOUNT + DIFFERENT BANK DETAILS
      * --------------------------------------------------
      *
-     * At this point:
-     *
-     * - The provider has a subaccount
-     * - BUT the bank/account has changed
-     *
-     * Therefore update the existing Paystack
-     * subaccount.
+     * If the old subaccount exists on Paystack but
+     * the provider changed bank/account details,
+     * update the existing Paystack subaccount.
      */
 
-    let finalSubaccountCode =
-      existingSubaccountCode;
-
+    let finalSubaccountCode = null;
     let paystackSubaccount = null;
 
-    if (existingSubaccountCode) {
+    if (
+      existingSubaccountCode &&
+      existingSubaccountExists &&
+      !sameAccountDetails
+    ) {
       console.log(
         "DIFFERENT BANK/ACCOUNT DETECTED."
       );
@@ -734,7 +751,8 @@ module.exports.setupProviderAccount = async (
           updateResponse.data?.data;
 
         finalSubaccountCode =
-          paystackSubaccount?.subaccount_code ||
+          paystackSubaccount
+            ?.subaccount_code ||
           existingSubaccountCode;
 
         console.log(
@@ -744,7 +762,8 @@ module.exports.setupProviderAccount = async (
               finalSubaccountCode,
 
             isVerified:
-              paystackSubaccount?.is_verified,
+              paystackSubaccount
+                ?.is_verified,
           }
         );
       } catch (error) {
@@ -768,13 +787,18 @@ module.exports.setupProviderAccount = async (
      * 11. CREATE NEW SUBACCOUNT
      * --------------------------------------------------
      *
-     * Only happens when provider has NEVER
-     * had a Paystack subaccount.
+     * This now handles BOTH:
+     *
+     * 1. Provider has never had a subaccount.
+     * 2. Provider has an old/stale subaccount code
+     *    that no longer exists on Paystack.
      */
 
-    if (!existingSubaccountCode) {
+    if (!finalSubaccountCode) {
       console.log(
-        "NO EXISTING PAYSTACK SUBACCOUNT."
+        existingSubaccountCode
+          ? "OLD PAYSTACK SUBACCOUNT IS INVALID OR NO LONGER EXISTS."
+          : "NO EXISTING PAYSTACK SUBACCOUNT."
       );
 
       console.log(
@@ -848,7 +872,8 @@ module.exports.setupProviderAccount = async (
         subaccountResponse.data?.data;
 
       finalSubaccountCode =
-        paystackSubaccount?.subaccount_code;
+        paystackSubaccount
+          ?.subaccount_code;
 
       if (!finalSubaccountCode) {
         console.error(
@@ -870,18 +895,18 @@ module.exports.setupProviderAccount = async (
             finalSubaccountCode,
 
           isVerified:
-            paystackSubaccount?.is_verified,
+            paystackSubaccount
+              ?.is_verified,
         }
       );
     }
 
     /**
      * --------------------------------------------------
-     * 12. FETCH ACTUAL PAYSTACK STATUS
+     * 12. FETCH FINAL PAYSTACK STATUS
      * --------------------------------------------------
-     *
-     * Never assume verification.
      */
+
     try {
       const statusResponse =
         await axios.get(
@@ -903,7 +928,7 @@ module.exports.setupProviderAccount = async (
       }
     } catch (error) {
       console.error(
-        "Paystack subaccount status check error:",
+        "Paystack final subaccount status check error:",
         error.response?.data ||
           error.message
       );
@@ -945,7 +970,7 @@ module.exports.setupProviderAccount = async (
         finalSubaccountCode,
 
       /**
-       * This is Paystack's REAL status.
+       * Paystack's REAL verification status.
        */
       isVerified:
         paystackIsVerified,
@@ -958,6 +983,9 @@ module.exports.setupProviderAccount = async (
       {
         providerId:
           provider._id,
+
+        providerName:
+          provider.name,
 
         subaccountCode:
           finalSubaccountCode,
@@ -1035,3 +1063,4 @@ module.exports.setupProviderAccount = async (
     });
   }
 };
+
