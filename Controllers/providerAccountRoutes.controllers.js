@@ -2,16 +2,13 @@ const axios = require("axios");
 const mongoose = require("mongoose");
 const User = require("../Models/user.models");
 
-const PAYSTACK_SECRET_KEY =
-  process.env.PAYSTACK_SECRET_KEY;
-
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_BASE_URL = "https://api.paystack.co";
 
 /**
- * Get the authenticated user's ID.
- *
- * Different authentication middleware/JWT payloads
- * may expose the ID using different property names.
+ * --------------------------------------------------
+ * GET AUTHENTICATED USER ID
+ * --------------------------------------------------
  */
 const getAuthenticatedUserId = (req) => {
   return (
@@ -24,7 +21,9 @@ const getAuthenticatedUserId = (req) => {
 };
 
 /**
- * Common Paystack headers
+ * --------------------------------------------------
+ * PAYSTACK HEADERS
+ * --------------------------------------------------
  */
 const paystackHeaders = {
   Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
@@ -32,23 +31,15 @@ const paystackHeaders = {
 };
 
 /**
+ * --------------------------------------------------
  * GET PROVIDER PAYMENT ACCOUNT
  *
  * GET /provider-account/account
+ * --------------------------------------------------
  */
 module.exports.getProviderAccount = async (req, res) => {
   try {
     const providerId = getAuthenticatedUserId(req);
-
-    console.log(
-      "GET PROVIDER ACCOUNT - req.user:",
-      req.user
-    );
-
-    console.log(
-      "GET PROVIDER ACCOUNT - providerId:",
-      providerId
-    );
 
     if (!providerId) {
       return res.status(401).json({
@@ -70,14 +61,9 @@ module.exports.getProviderAccount = async (req, res) => {
     );
 
     if (!provider) {
-      console.log(
-        "Provider/User not found with ID:",
-        providerId
-      );
-
       return res.status(404).json({
         success: false,
-        message: "Provider not found",
+        message: "Provider not found.",
       });
     }
 
@@ -85,24 +71,82 @@ module.exports.getProviderAccount = async (req, res) => {
       return res.status(403).json({
         success: false,
         message:
-          "Only providers can access this page",
+          "Only providers can access this page.",
       });
     }
 
-    const paystack = provider.paystack || {};
+    let paystack = provider.paystack || {};
+
+    /**
+     * --------------------------------------------------
+     * SYNCHRONIZE VERIFICATION STATUS WITH PAYSTACK
+     * --------------------------------------------------
+     */
+    if (
+      PAYSTACK_SECRET_KEY &&
+      paystack.subaccountCode
+    ) {
+      try {
+        const response = await axios.get(
+          `${PAYSTACK_BASE_URL}/subaccount/${encodeURIComponent(
+            paystack.subaccountCode
+          )}`,
+          {
+            headers: paystackHeaders,
+          }
+        );
+
+        const paystackData = response.data?.data;
+
+        if (
+          response.data?.status &&
+          paystackData
+        ) {
+          const paystackIsVerified =
+            Boolean(paystackData.is_verified);
+
+          provider.paystack = {
+            ...(provider.paystack || {}),
+            isVerified: paystackIsVerified,
+          };
+
+          await provider.save();
+
+          paystack = provider.paystack;
+        }
+      } catch (error) {
+        console.error(
+          "Paystack verification sync error:",
+          error.response?.data ||
+            error.message
+        );
+      }
+    }
 
     return res.status(200).json({
       success: true,
 
       account: {
-        accountName: paystack.accountName || "",
-        accountNumber: paystack.accountNumber || "",
-        bankCode: paystack.bankCode || "",
-        bankName: paystack.bankName || "",
-        isVerified: Boolean(paystack.isVerified),
-        hasSubaccount: Boolean(
-          paystack.subaccountCode
-        ),
+        accountName:
+          paystack.accountName || "",
+
+        accountNumber:
+          paystack.accountNumber || "",
+
+        bankCode:
+          paystack.bankCode || "",
+
+        bankName:
+          paystack.bankName || "",
+
+        isVerified:
+          Boolean(paystack.isVerified),
+
+        hasSubaccount:
+          Boolean(paystack.subaccountCode),
+
+        subaccountCode:
+          paystack.subaccountCode || null,
       },
     });
   } catch (error) {
@@ -114,16 +158,17 @@ module.exports.getProviderAccount = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        "Failed to load payment account",
+        "Failed to load payment account.",
     });
   }
 };
 
-
 /**
+ * --------------------------------------------------
  * GET PAYSTACK BANKS
  *
  * GET /provider-account/banks
+ * --------------------------------------------------
  */
 module.exports.getPaystackBanks = async (
   req,
@@ -151,14 +196,16 @@ module.exports.getPaystackBanks = async (
         },
 
         headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+          Authorization:
+            `Bearer ${PAYSTACK_SECRET_KEY}`,
         },
       }
     );
 
     return res.status(200).json({
       success: true,
-      banks: response.data?.data || [],
+      banks:
+        response.data?.data || [],
     });
   } catch (error) {
     console.error(
@@ -171,16 +218,34 @@ module.exports.getPaystackBanks = async (
       success: false,
       message:
         error.response?.data?.message ||
-        "Failed to load banks",
+        "Failed to load banks.",
     });
   }
 };
 
-
 /**
- * VERIFY + SAVE PROVIDER PAYMENT ACCOUNT
+ * --------------------------------------------------
+ * SETUP / UPDATE PROVIDER PAYMENT ACCOUNT
  *
  * POST /provider-account/account
+ * --------------------------------------------------
+ *
+ * BEHAVIOR
+ *
+ * SAME BANK + SAME ACCOUNT
+ * → Do NOT update Paystack
+ * → Do NOT create another subaccount
+ * → Keep existing subaccount
+ *
+ * DIFFERENT BANK OR ACCOUNT
+ * → Update existing Paystack subaccount
+ *
+ * NO SUBACCOUNT
+ * → Create new Paystack subaccount
+ *
+ * PAYSTACK VERIFICATION
+ * → Always use Paystack's real status
+ * --------------------------------------------------
  */
 module.exports.setupProviderAccount = async (
   req,
@@ -189,17 +254,12 @@ module.exports.setupProviderAccount = async (
   try {
     /**
      * --------------------------------------------------
-     * 1. CHECK AUTHENTICATION
+     * 1. AUTHENTICATION
      * --------------------------------------------------
      */
 
     const providerId =
       getAuthenticatedUserId(req);
-
-    console.log(
-      "SETUP PROVIDER ACCOUNT - req.user:",
-      req.user
-    );
 
     console.log(
       "SETUP PROVIDER ACCOUNT - providerId:",
@@ -214,16 +274,21 @@ module.exports.setupProviderAccount = async (
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(providerId)) {
+    if (
+      !mongoose.Types.ObjectId.isValid(
+        providerId
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid provider ID.",
+        message:
+          "Invalid provider ID.",
       });
     }
 
     /**
      * --------------------------------------------------
-     * 2. GET REQUEST DATA
+     * 2. REQUEST DATA
      * --------------------------------------------------
      */
 
@@ -233,24 +298,22 @@ module.exports.setupProviderAccount = async (
       accountNumber,
     } = req.body;
 
-    const cleanBankCode = String(
-      bankCode || ""
-    ).trim();
+    const cleanBankCode =
+      String(bankCode || "").trim();
 
-    const cleanBankName = String(
-      bankName || ""
-    ).trim();
+    const cleanBankName =
+      String(bankName || "").trim();
 
-    const cleanAccountNumber = String(
-      accountNumber || ""
-    )
-      .replace(/\D/g, "")
-      .trim();
+    const cleanAccountNumber =
+      String(accountNumber || "")
+        .replace(/\D/g, "")
+        .trim();
 
     if (!cleanBankCode) {
       return res.status(400).json({
         success: false,
-        message: "Please select your bank.",
+        message:
+          "Please select your bank.",
       });
     }
 
@@ -263,7 +326,9 @@ module.exports.setupProviderAccount = async (
     }
 
     if (
-      !/^\d{10}$/.test(cleanAccountNumber)
+      !/^\d{10}$/.test(
+        cleanAccountNumber
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -274,7 +339,7 @@ module.exports.setupProviderAccount = async (
 
     /**
      * --------------------------------------------------
-     * 3. CHECK PAYSTACK CONFIGURATION
+     * 3. PAYSTACK CONFIGURATION
      * --------------------------------------------------
      */
 
@@ -296,31 +361,20 @@ module.exports.setupProviderAccount = async (
      * --------------------------------------------------
      */
 
-    const provider = await User.findById(
-      providerId
-    );
-
-    console.log(
-      "FOUND PROVIDER:",
-      provider
-        ? {
-            id: provider._id,
-            email: provider.email,
-            role: provider.role,
-          }
-        : null
-    );
+    const provider =
+      await User.findById(providerId);
 
     if (!provider) {
       return res.status(404).json({
         success: false,
-        message: "Provider not found",
+        message:
+          "Provider not found.",
       });
     }
 
     /**
      * --------------------------------------------------
-     * 5. VERIFY USER ROLE
+     * 5. VERIFY ROLE
      * --------------------------------------------------
      */
 
@@ -328,37 +382,44 @@ module.exports.setupProviderAccount = async (
       return res.status(403).json({
         success: false,
         message:
-          "Only providers can setup payment accounts",
+          "Only providers can setup payment accounts.",
       });
     }
 
     /**
      * --------------------------------------------------
-     * 6. RESOLVE BANK ACCOUNT WITH PAYSTACK
+     * 6. RESOLVE BANK ACCOUNT
      * --------------------------------------------------
      *
-     * This confirms that the account number belongs
-     * to the selected bank and returns the account name.
+     * This confirms that:
+     *
+     * Bank + Account Number
+     *
+     * actually exists and returns the real
+     * account name.
      */
 
     let resolveResponse;
 
     try {
-      resolveResponse = await axios.get(
-        `${PAYSTACK_BASE_URL}/bank/resolve`,
-        {
-          params: {
-            account_number:
-              cleanAccountNumber,
+      resolveResponse =
+        await axios.get(
+          `${PAYSTACK_BASE_URL}/bank/resolve`,
+          {
+            params: {
+              account_number:
+                cleanAccountNumber,
 
-            bank_code: cleanBankCode,
-          },
+              bank_code:
+                cleanBankCode,
+            },
 
-          headers: {
-            Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          },
-        }
-      );
+            headers: {
+              Authorization:
+                `Bearer ${PAYSTACK_SECRET_KEY}`,
+            },
+          }
+        );
     } catch (error) {
       console.error(
         "Paystack account resolve error:",
@@ -374,7 +435,9 @@ module.exports.setupProviderAccount = async (
       });
     }
 
-    if (!resolveResponse.data?.status) {
+    if (
+      !resolveResponse.data?.status
+    ) {
       return res.status(400).json({
         success: false,
         message:
@@ -387,7 +450,10 @@ module.exports.setupProviderAccount = async (
       resolveResponse.data?.data || {};
 
     const resolvedAccountName =
-      resolvedAccount.account_name;
+      String(
+        resolvedAccount.account_name ||
+          ""
+      ).trim();
 
     if (!resolvedAccountName) {
       return res.status(400).json({
@@ -398,12 +464,14 @@ module.exports.setupProviderAccount = async (
     }
 
     console.log(
-      "Paystack resolved account:",
+      "PAYSTACK RESOLVED ACCOUNT:",
       {
         accountName:
           resolvedAccountName,
+
         accountNumber:
           cleanAccountNumber,
+
         bankCode:
           cleanBankCode,
       }
@@ -411,23 +479,214 @@ module.exports.setupProviderAccount = async (
 
     /**
      * --------------------------------------------------
-     * 7. UPDATE EXISTING PAYSTACK SUBACCOUNT
+     * 7. EXISTING PAYSTACK ACCOUNT
      * --------------------------------------------------
      */
 
+    const existingPaystack =
+      provider.paystack || {};
+
     const existingSubaccountCode =
-      provider.paystack?.subaccountCode;
+      existingPaystack.subaccountCode ||
+      null;
+
+    const existingAccountNumber =
+      String(
+        existingPaystack.accountNumber ||
+          ""
+      )
+        .replace(/\D/g, "")
+        .trim();
+
+    const existingBankCode =
+      String(
+        existingPaystack.bankCode || ""
+      ).trim();
+
+    /**
+     * --------------------------------------------------
+     * 8. CHECK IF SAME ACCOUNT
+     * --------------------------------------------------
+     *
+     * IMPORTANT:
+     *
+     * We compare BOTH:
+     *
+     * - Bank code
+     * - Account number
+     *
+     * This prevents a false match where the same
+     * account number somehow exists under another bank.
+     */
+
+    const sameAccountDetails =
+      Boolean(existingSubaccountCode) &&
+      existingAccountNumber ===
+        cleanAccountNumber &&
+      existingBankCode ===
+        cleanBankCode;
+
+    /**
+     * --------------------------------------------------
+     * 9. SAME ACCOUNT
+     * --------------------------------------------------
+     *
+     * If the provider submits exactly the same
+     * bank/account details:
+     *
+     * DO NOT UPDATE PAYSTACK.
+     *
+     * DO NOT CREATE A NEW SUBACCOUNT.
+     */
+
+    if (sameAccountDetails) {
+      console.log(
+        "SAME PAYSTACK ACCOUNT DETAILS."
+      );
+
+      console.log(
+        "NO PAYSTACK UPDATE REQUIRED."
+      );
+
+      let currentIsVerified =
+        Boolean(
+          existingPaystack.isVerified
+        );
+
+      /**
+       * Fetch the current real Paystack status.
+       */
+      try {
+        const statusResponse =
+          await axios.get(
+            `${PAYSTACK_BASE_URL}/subaccount/${encodeURIComponent(
+              existingSubaccountCode
+            )}`,
+            {
+              headers:
+                paystackHeaders,
+            }
+          );
+
+        if (
+          statusResponse.data?.status &&
+          statusResponse.data?.data
+        ) {
+          const currentData =
+            statusResponse.data.data;
+
+          currentIsVerified =
+            Boolean(
+              currentData.is_verified
+            );
+        }
+      } catch (error) {
+        console.error(
+          "Unable to refresh Paystack status:",
+          error.response?.data ||
+            error.message
+        );
+      }
+
+      /**
+       * Keep local database synchronized.
+       */
+      provider.paystack = {
+        ...(provider.paystack || {}),
+
+        accountName:
+          resolvedAccountName,
+
+        accountNumber:
+          cleanAccountNumber,
+
+        bankCode:
+          cleanBankCode,
+
+        bankName:
+          cleanBankName,
+
+        subaccountCode:
+          existingSubaccountCode,
+
+        isVerified:
+          currentIsVerified,
+      };
+
+      await provider.save();
+
+      console.log(
+        "EXISTING SUBACCOUNT KEPT:",
+        existingSubaccountCode
+      );
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          currentIsVerified
+            ? "Your payment account is already connected and verified."
+            : "Your payment account is already connected. Paystack verification is pending.",
+
+        account: {
+          accountName:
+            resolvedAccountName,
+
+          accountNumber:
+            cleanAccountNumber,
+
+          bankCode:
+            cleanBankCode,
+
+          bankName:
+            cleanBankName,
+
+          isVerified:
+            currentIsVerified,
+
+          hasSubaccount: true,
+
+          subaccountCode:
+            existingSubaccountCode,
+        },
+      });
+    }
+
+    /**
+     * --------------------------------------------------
+     * 10. DIFFERENT ACCOUNT
+     * --------------------------------------------------
+     *
+     * At this point:
+     *
+     * - The provider has a subaccount
+     * - BUT the bank/account has changed
+     *
+     * Therefore update the existing Paystack
+     * subaccount.
+     */
+
+    let finalSubaccountCode =
+      existingSubaccountCode;
+
+    let paystackSubaccount = null;
 
     if (existingSubaccountCode) {
       console.log(
-        "Existing Paystack subaccount found:",
+        "DIFFERENT BANK/ACCOUNT DETECTED."
+      );
+
+      console.log(
+        "UPDATING EXISTING PAYSTACK SUBACCOUNT:",
         existingSubaccountCode
       );
 
       try {
         const updateResponse =
           await axios.put(
-            `${PAYSTACK_BASE_URL}/subaccount/${existingSubaccountCode}`,
+            `${PAYSTACK_BASE_URL}/subaccount/${encodeURIComponent(
+              existingSubaccountCode
+            )}`,
             {
               business_name:
                 provider.name ||
@@ -440,6 +699,10 @@ module.exports.setupProviderAccount = async (
               account_number:
                 cleanAccountNumber,
 
+              /**
+               * Servicely = 10%
+               * Provider = 90%
+               */
               percentage_charge: 10,
 
               primary_contact_email:
@@ -447,6 +710,8 @@ module.exports.setupProviderAccount = async (
 
               primary_contact_name:
                 resolvedAccountName,
+
+              active: true,
             },
             {
               headers:
@@ -465,61 +730,23 @@ module.exports.setupProviderAccount = async (
           });
         }
 
-        /**
-         * Preserve any other paystack fields
-         * already stored on the provider.
-         */
-        provider.paystack = {
-          ...(provider.paystack || {}),
+        paystackSubaccount =
+          updateResponse.data?.data;
 
-          accountName:
-            resolvedAccountName,
-
-          accountNumber:
-            cleanAccountNumber,
-
-          bankCode:
-            cleanBankCode,
-
-          bankName:
-            cleanBankName,
-
-          subaccountCode:
-            existingSubaccountCode,
-
-          isVerified: true,
-        };
-
-        await provider.save();
+        finalSubaccountCode =
+          paystackSubaccount?.subaccount_code ||
+          existingSubaccountCode;
 
         console.log(
-          "Provider Paystack account updated successfully."
+          "PAYSTACK SUBACCOUNT UPDATED:",
+          {
+            subaccountCode:
+              finalSubaccountCode,
+
+            isVerified:
+              paystackSubaccount?.is_verified,
+          }
         );
-
-        return res.status(200).json({
-          success: true,
-
-          message:
-            "Payment account updated successfully",
-
-          account: {
-            accountName:
-              resolvedAccountName,
-
-            accountNumber:
-              cleanAccountNumber,
-
-            bankCode:
-              cleanBankCode,
-
-            bankName:
-              cleanBankName,
-
-            isVerified: true,
-
-            hasSubaccount: true,
-          },
-        });
       } catch (error) {
         console.error(
           "Paystack subaccount update error:",
@@ -538,95 +765,164 @@ module.exports.setupProviderAccount = async (
 
     /**
      * --------------------------------------------------
-     * 8. CREATE NEW PAYSTACK SUBACCOUNT
+     * 11. CREATE NEW SUBACCOUNT
      * --------------------------------------------------
      *
-     * Servicely keeps 10%.
-     * Provider receives the remaining 90%.
+     * Only happens when provider has NEVER
+     * had a Paystack subaccount.
      */
 
-    console.log(
-      "Creating new Paystack subaccount..."
-    );
+    if (!existingSubaccountCode) {
+      console.log(
+        "NO EXISTING PAYSTACK SUBACCOUNT."
+      );
 
-    let subaccountResponse;
+      console.log(
+        "CREATING NEW PAYSTACK SUBACCOUNT..."
+      );
 
+      let subaccountResponse;
+
+      try {
+        subaccountResponse =
+          await axios.post(
+            `${PAYSTACK_BASE_URL}/subaccount`,
+            {
+              business_name:
+                provider.name ||
+                provider.fullName ||
+                resolvedAccountName,
+
+              settlement_bank:
+                cleanBankCode,
+
+              account_number:
+                cleanAccountNumber,
+
+              /**
+               * Servicely = 10%
+               * Provider = 90%
+               */
+              percentage_charge: 10,
+
+              primary_contact_email:
+                provider.email,
+
+              primary_contact_name:
+                resolvedAccountName,
+
+              active: true,
+            },
+            {
+              headers:
+                paystackHeaders,
+            }
+          );
+      } catch (error) {
+        console.error(
+          "Paystack subaccount creation error:",
+          error.response?.data ||
+            error.message
+        );
+
+        return res.status(400).json({
+          success: false,
+          message:
+            error.response?.data?.message ||
+            "Failed to create Paystack subaccount.",
+        });
+      }
+
+      if (
+        !subaccountResponse.data?.status
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            subaccountResponse.data?.message ||
+            "Failed to create Paystack subaccount.",
+        });
+      }
+
+      paystackSubaccount =
+        subaccountResponse.data?.data;
+
+      finalSubaccountCode =
+        paystackSubaccount?.subaccount_code;
+
+      if (!finalSubaccountCode) {
+        console.error(
+          "Paystack response did not contain subaccount_code:",
+          paystackSubaccount
+        );
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "Paystack did not return a valid subaccount.",
+        });
+      }
+
+      console.log(
+        "NEW PAYSTACK SUBACCOUNT CREATED:",
+        {
+          subaccountCode:
+            finalSubaccountCode,
+
+          isVerified:
+            paystackSubaccount?.is_verified,
+        }
+      );
+    }
+
+    /**
+     * --------------------------------------------------
+     * 12. FETCH ACTUAL PAYSTACK STATUS
+     * --------------------------------------------------
+     *
+     * Never assume verification.
+     */
     try {
-      subaccountResponse =
-        await axios.post(
-          `${PAYSTACK_BASE_URL}/subaccount`,
-          {
-            business_name:
-              provider.name ||
-              provider.fullName ||
-              resolvedAccountName,
-
-            settlement_bank:
-              cleanBankCode,
-
-            account_number:
-              cleanAccountNumber,
-
-            percentage_charge: 10,
-
-            primary_contact_email:
-              provider.email,
-
-            primary_contact_name:
-              resolvedAccountName,
-          },
+      const statusResponse =
+        await axios.get(
+          `${PAYSTACK_BASE_URL}/subaccount/${encodeURIComponent(
+            finalSubaccountCode
+          )}`,
           {
             headers:
               paystackHeaders,
           }
         );
+
+      if (
+        statusResponse.data?.status &&
+        statusResponse.data?.data
+      ) {
+        paystackSubaccount =
+          statusResponse.data.data;
+      }
     } catch (error) {
       console.error(
-        "Paystack subaccount creation error:",
+        "Paystack subaccount status check error:",
         error.response?.data ||
           error.message
       );
-
-      return res.status(400).json({
-        success: false,
-        message:
-          error.response?.data?.message ||
-          "Failed to create Paystack subaccount.",
-      });
-    }
-
-    if (
-      !subaccountResponse.data?.status
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          subaccountResponse.data?.message ||
-          "Failed to create Paystack subaccount.",
-      });
-    }
-
-    const paystackData =
-      subaccountResponse.data?.data;
-
-    if (
-      !paystackData?.subaccount_code
-    ) {
-      console.error(
-        "Paystack response did not contain subaccount_code:",
-        paystackData
-      );
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "Paystack did not return a valid subaccount.",
-      });
     }
 
     /**
      * --------------------------------------------------
-     * 9. SAVE PAYSTACK ACCOUNT TO USER
+     * 13. REAL PAYSTACK VERIFICATION STATUS
+     * --------------------------------------------------
+     */
+
+    const paystackIsVerified =
+      Boolean(
+        paystackSubaccount?.is_verified
+      );
+
+    /**
+     * --------------------------------------------------
+     * 14. SAVE PROVIDER ACCOUNT
      * --------------------------------------------------
      */
 
@@ -646,35 +942,52 @@ module.exports.setupProviderAccount = async (
         cleanBankName,
 
       subaccountCode:
-        paystackData.subaccount_code,
+        finalSubaccountCode,
 
-      isVerified: true,
+      /**
+       * This is Paystack's REAL status.
+       */
+      isVerified:
+        paystackIsVerified,
     };
 
     await provider.save();
 
     console.log(
-      "Provider payout account saved successfully:",
+      "PROVIDER PAYSTACK ACCOUNT SAVED:",
       {
         providerId:
           provider._id,
 
         subaccountCode:
-          paystackData.subaccount_code,
+          finalSubaccountCode,
+
+        isVerified:
+          paystackIsVerified,
       }
     );
 
     /**
      * --------------------------------------------------
-     * 10. SEND SUCCESS RESPONSE
+     * 15. RESPONSE MESSAGE
+     * --------------------------------------------------
+     */
+
+    const message =
+      paystackIsVerified
+        ? "Payment account saved and verified successfully."
+        : "Payment account saved successfully. Paystack verification is pending.";
+
+    /**
+     * --------------------------------------------------
+     * 16. FINAL RESPONSE
      * --------------------------------------------------
      */
 
     return res.status(200).json({
       success: true,
 
-      message:
-        "Payment account verified and saved successfully",
+      message,
 
       account: {
         accountName:
@@ -689,14 +1002,21 @@ module.exports.setupProviderAccount = async (
         bankName:
           cleanBankName,
 
-        isVerified: true,
+        isVerified:
+          paystackIsVerified,
 
-        hasSubaccount: true,
+        hasSubaccount:
+          Boolean(
+            finalSubaccountCode
+          ),
+
+        subaccountCode:
+          finalSubaccountCode,
       },
     });
   } catch (error) {
     console.error(
-      "Setup provider account error:",
+      "SETUP PROVIDER ACCOUNT ERROR:",
       error.response?.data ||
         error.message ||
         error
@@ -711,7 +1031,7 @@ module.exports.setupProviderAccount = async (
       message:
         paystackMessage ||
         error.message ||
-        "Unable to setup payment account",
+        "Unable to setup payment account.",
     });
   }
 };
