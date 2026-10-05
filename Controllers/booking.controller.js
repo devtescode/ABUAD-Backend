@@ -207,3 +207,259 @@ module.exports.createBooking = async (req, res) => {
     });
   }
 };
+
+
+/**
+ * --------------------------------------------------
+ * GET CUSTOMER BOOKINGS
+ *
+ * GET /bookings/my-bookings
+ *
+ * Returns the authenticated customer's real bookings
+ * including real Paystack payment information.
+ * --------------------------------------------------
+ */
+module.exports.getCustomerBookings = async (req, res) => {
+  try {
+    const customerId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(customerId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid customer ID.",
+      });
+    }
+
+    const bookings = await Booking.find({
+      customer: customerId,
+    })
+      .populate(
+        "customer",
+        "name fullName email avatar profileImage"
+      )
+      .populate(
+        "provider",
+        "name fullName email avatar profileImage role"
+      )
+      .populate(
+        "service",
+        "title name category price duration description image imageUrl status provider"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedBookings = bookings.map((booking) => {
+      const provider = booking.provider || {};
+      const service = booking.service || {};
+
+      const payment = booking.payment || {};
+
+      /**
+       * --------------------------------------------------
+       * REAL PAYMENT STATUS
+       * --------------------------------------------------
+       *
+       * paymentStatus comes directly from the database,
+       * which is updated by the Paystack webhook/verification.
+       */
+      let paymentStatus = booking.paymentStatus || "unpaid";
+
+      /**
+       * --------------------------------------------------
+       * FRONTEND STATUS
+       * --------------------------------------------------
+       *
+       * Keep your existing frontend Booking interface
+       * compatible while exposing the real payment status.
+       */
+      let frontendStatus = booking.status || "pending";
+
+      if (paymentStatus === "paid") {
+        frontendStatus = "paid";
+      } else if (
+        paymentStatus === "pending" &&
+        booking.status === "pending"
+      ) {
+        frontendStatus = "payment_pending";
+      }
+
+      if (booking.status === "completed") {
+        frontendStatus = "completed";
+      }
+
+      if (booking.status === "cancelled") {
+        frontendStatus = "cancelled";
+      }
+
+      return {
+        /**
+         * Existing frontend booking fields
+         */
+        id: String(booking._id),
+
+        serviceId: service?._id
+          ? String(service._id)
+          : booking.service
+            ? String(booking.service)
+            : "",
+
+        serviceName:
+          service.title ||
+          service.name ||
+          "Service",
+
+        providerId: provider?._id
+          ? String(provider._id)
+          : booking.provider
+            ? String(booking.provider)
+            : "",
+
+        providerName:
+          provider.name ||
+          provider.fullName ||
+          "Provider",
+
+        providerAvatar:
+          provider.avatar ||
+          provider.profileImage ||
+          "/images/avatar-placeholder.png",
+
+        customerName:
+          booking.customer?.name ||
+          booking.customer?.fullName ||
+          "Customer",
+
+        date: booking.date || "",
+
+        time: booking.time || "",
+
+        location: booking.location || "",
+
+        price: Number(booking.amount || service.price || 0),
+
+        notes: booking.note || "",
+
+        status: frontendStatus,
+
+        createdAt: booking.createdAt
+          ? new Date(booking.createdAt).toISOString()
+          : "",
+
+        /**
+         * --------------------------------------------------
+         * REAL PAYMENT INFORMATION
+         * --------------------------------------------------
+         */
+        payment: {
+          status: paymentStatus,
+
+          reference:
+            payment.reference ||
+            booking.paymentReference ||
+            null,
+
+          transactionId:
+            payment.transactionId || null,
+
+          amount:
+            payment.amount !== null &&
+              payment.amount !== undefined
+              ? Number(payment.amount) / 100
+              : Number(booking.amount || 0),
+
+          currency:
+            payment.currency || "NGN",
+
+          channel:
+            payment.channel || null,
+
+          gatewayResponse:
+            payment.gatewayResponse || null,
+
+          paidAt:
+            payment.paidAt
+              ? new Date(payment.paidAt).toISOString()
+              : null,
+        },
+
+        /**
+         * Payment reference kept separately as well
+         * for easy frontend access.
+         */
+        paymentReference:
+          booking.paymentReference || null,
+
+        paymentStatus,
+
+        /**
+         * --------------------------------------------------
+         * SERVICELY SPLIT
+         * --------------------------------------------------
+         */
+        platformFee: Number(
+          booking.platformFee || 0
+        ),
+
+        providerAmount: Number(
+          booking.providerAmount || 0
+        ),
+
+        /**
+         * Useful booking details
+         */
+        bookingStatus:
+          booking.status || "pending",
+
+        serviceDetails: {
+          title:
+            service.title ||
+            service.name ||
+            "Service",
+
+          category:
+            service.category || "",
+
+          duration:
+            service.duration || "",
+
+          description:
+            service.description || "",
+
+          image:
+            service.image ||
+            service.imageUrl ||
+            null,
+        },
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: formattedBookings.length,
+      bookings: formattedBookings,
+    });
+  } catch (error) {
+    console.error(
+      "GET CUSTOMER BOOKINGS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to load customer bookings.",
+    });
+  }
+};

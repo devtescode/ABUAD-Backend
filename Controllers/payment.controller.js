@@ -268,11 +268,34 @@ module.exports.initializePayment =
           "PAYSTACK SUBACCOUNT CHECK:",
           subaccountTest.data
         );
+
+        if (
+          !subaccountTest.data?.status ||
+          !subaccountTest.data?.data?.active
+        ) {
+          booking.paymentStatus = "failed";
+          await booking.save();
+
+          return res.status(400).json({
+            success: false,
+            message:
+              "This provider's Paystack subaccount is inactive or invalid.",
+          });
+        }
       } catch (error) {
         console.error(
           "PAYSTACK SUBACCOUNT CHECK ERROR:",
           error.response?.data || error.message
         );
+
+        booking.paymentStatus = "failed";
+        await booking.save();
+
+        return res.status(400).json({
+          success: false,
+          message:
+            "This provider's Paystack subaccount is invalid or unavailable.",
+        });
       }
 
       const response =
@@ -562,7 +585,7 @@ module.exports.paystackWebhook =
         return res.sendStatus(200);
       }
 
-     
+
 
       // ==========================================
       // SAVE PAYMENT

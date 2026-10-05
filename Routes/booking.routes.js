@@ -20,4 +20,10 @@ router.post(
   bookingController.createBooking
 );
 
+router.get(
+  "/my-bookings",
+  verifyToken,
+  bookingController.getCustomerBookings
+);
+
 module.exports = router;
