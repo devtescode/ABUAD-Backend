@@ -22,7 +22,7 @@ router.post(
 
 router.get(
   "/my-bookings",
-  verifyToken,
+  verifyToken,  
   bookingController.getCustomerBookings
 );
 
@@ -30,5 +30,11 @@ router.get(
   "/provider-bookings",
   verifyToken,
   bookingController.getProviderBookings
+);
+
+router.patch(
+  "/:bookingId/complete",
+  verifyToken,
+  bookingController.completeBooking
 );
 module.exports = router;

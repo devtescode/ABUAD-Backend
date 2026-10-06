@@ -610,3 +610,107 @@ module.exports.getProviderBookings = async (req, res) => {
     });
   }
 };
+
+module.exports.completeBooking = async (req, res) => {
+  try {
+    const providerId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    const { bookingId } = req.params;
+
+    if (!providerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID.",
+      });
+    }
+
+    const booking = await Booking.findOne({
+      _id: bookingId,
+      provider: providerId,
+    });
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found.",
+      });
+    }
+
+    if (booking.paymentStatus !== "paid") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This booking cannot be completed because payment has not been confirmed.",
+      });
+    }
+
+    if (
+      ["cancelled", "rejected"].includes(
+        booking.status
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This booking cannot be completed.",
+      });
+    }
+
+    if (booking.status === "completed") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This booking is already completed.",
+      });
+    }
+
+    booking.status = "completed";
+
+    await booking.save();
+
+    const populatedBooking =
+      await Booking.findById(booking._id)
+        .populate(
+          "customer",
+          "name email avatar profileImage phoneNumber"
+        )
+        .populate(
+          "provider",
+          "name email avatar profileImage"
+        )
+        .populate(
+          "service",
+          "title category price duration description image"
+        );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Service marked as completed successfully.",
+      booking: populatedBooking,
+    });
+  } catch (error) {
+    console.error(
+      "COMPLETE BOOKING ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to complete booking.",
+    });
+  }
+};
