@@ -15,6 +15,7 @@ const {
   getProviderServices,
   suspendProvider,
   unsuspendProvider,
+  getAllBookings
 } = require("../Controllers/admin.getproviderinfo");
 
 const { adminAuth } = require("../middleware/adminauth");
@@ -88,6 +89,12 @@ router.patch(
   unsuspendProvider
 );
 
+
+router.get(
+  "/getallbookings",
+  adminAuth,
+  getAllBookings
+);
 
 
 module.exports = router;

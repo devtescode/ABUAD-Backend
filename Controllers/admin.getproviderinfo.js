@@ -1,7 +1,7 @@
 
 const User = require("../Models/user.models");
 const Service = require("../Models/service.models");
-
+const Booking = require("../Models/booking.models");
 /**
  * GET /admin/providers
  * Get all registered providers
@@ -302,3 +302,107 @@ module.exports.unsuspendProvider = async (req, res) => {
   }
 };
 
+// ======================================================
+// GET ALL BOOKINGS - ADMIN
+// ======================================================
+
+module.exports.getAllBookings = async (req, res) => {
+  try {
+    const bookings = await Booking.find({})
+      .populate(
+        "customer",
+        "name fullName email avatar profileImage"
+      )
+      .populate(
+        "provider",
+        "name fullName email avatar profileImage role status"
+      )
+      .populate(
+        "service",
+        "title category price duration description image status"
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const formattedBookings = bookings.map((booking) => {
+      const customer = booking.customer || {};
+      const provider = booking.provider || {};
+      const service = booking.service || {};
+
+      return {
+        id: String(booking._id),
+
+        serviceId: service?._id
+          ? String(service._id)
+          : String(booking.service || ""),
+
+        serviceName: service.title || "Service",
+        serviceCategory: service.category || "",
+        serviceDescription: service.description || "",
+        serviceImage: service.image || "",
+
+        providerId: provider?._id
+          ? String(provider._id)
+          : String(booking.provider || ""),
+
+        providerName:
+          provider.name ||
+          provider.fullName ||
+          "Provider",
+
+        providerEmail: provider.email || "",
+
+        customerId: customer?._id
+          ? String(customer._id)
+          : String(booking.customer || ""),
+
+        customerName:
+          customer.name ||
+          customer.fullName ||
+          "Customer",
+
+        customerEmail: customer.email || "",
+
+        date: booking.date || "",
+        time: booking.time || "",
+        location: booking.location || "",
+        notes: booking.note || "",
+
+        price: Number(booking.amount) || 0,
+
+        status: booking.status || "pending",
+        paymentStatus: booking.paymentStatus || "unpaid",
+
+        paymentReference:
+          booking.paymentReference || null,
+
+        platformFee:
+          Number(booking.platformFee) || 0,
+
+        providerAmount:
+          Number(booking.providerAmount) || 0,
+
+        createdAt: booking.createdAt,
+        updatedAt: booking.updatedAt,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: formattedBookings.length,
+      bookings: formattedBookings,
+    });
+  } catch (error) {
+    console.error(
+      "GET ALL BOOKINGS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to load all bookings.",
+    });
+  }
+};
