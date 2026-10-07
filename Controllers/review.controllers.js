@@ -279,3 +279,135 @@ module.exports.getBookingReview = async (req, res) => {
     });
   }
 };
+
+module.exports.deleteReview = async (req, res) => {
+  try {
+    const customerId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const { reviewId } = req.params;
+
+    const review = await Review.findById(reviewId);
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found.",
+      });
+    }
+
+    if (String(review.customer) !== String(customerId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only delete your own review.",
+      });
+    }
+
+    await Review.findByIdAndDelete(reviewId);
+
+    return res.status(200).json({
+      success: true,
+      message: "Review deleted successfully.",
+    });
+  } catch (error) {
+    console.error("DELETE REVIEW ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Unable to delete review.",
+    });
+  }
+};
+
+
+module.exports.updateReview = async (req, res) => {
+  try {
+    const customerId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!customerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required.",
+      });
+    }
+
+    const { reviewId } = req.params;
+    const { rating, comment } = req.body;
+
+    const review = await Review.findById(reviewId);
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found.",
+      });
+    }
+
+    if (String(review.customer) !== String(customerId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only edit your own review.",
+      });
+    }
+
+    const numericRating = Number(rating);
+
+    if (
+      !numericRating ||
+      numericRating < 1 ||
+      numericRating > 5
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Rating must be between 1 and 5.",
+      });
+    }
+
+    review.rating = numericRating;
+    review.comment = comment?.trim() || "";
+
+    await review.save();
+
+    const updatedReview = await Review.findById(review._id)
+      .populate(
+        "provider",
+        "name fullName avatar profileImage"
+      )
+      .populate(
+        "service",
+        "title category image price"
+      )
+      .populate(
+        "booking",
+        "date time status"
+      );
+
+    return res.status(200).json({
+      success: true,
+      message: "Review updated successfully.",
+      review: updatedReview,
+    });
+  } catch (error) {
+    console.error("UPDATE REVIEW ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message || "Unable to update review.",
+    });
+  }
+};

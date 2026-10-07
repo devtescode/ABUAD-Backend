@@ -7,6 +7,8 @@ const {
   getProviderReviews,
   getCustomerReviews,
   getBookingReview,
+  deleteReview,
+  updateReview
 } = require("../Controllers/review.controllers");
 
 const { verifyToken } = require("../middleware/auth");
@@ -40,6 +42,18 @@ router.get(
   "/booking/:bookingId",
   verifyToken,
   getBookingReview
+);
+
+router.delete(
+  "/deletereview/:reviewId",
+  verifyToken,
+  deleteReview
+);
+
+router.put(
+  "/updatereview/:reviewId",
+  verifyToken,
+  updateReview
 );
 
 
