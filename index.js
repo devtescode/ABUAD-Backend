@@ -14,6 +14,7 @@ const availabilityRoutes = require("./Routes/availability.routes");
 const providerAccountRoutes = require("./Routes/providerAccountRoutes.routes");
 const paymentRoutes = require("./Routes/payment.routes");
 const bookingsRoutes = require("./Routes/booking.routes");
+const reviewRoutes = require("./Routes/review.routes");
 
 const app = express();
 const server = http.createServer(app);
@@ -102,6 +103,8 @@ app.use("/availability", availabilityRoutes);
 app.use("/provider-account", providerAccountRoutes);
 
 app.use("/bookings", bookingsRoutes)
+
+app.use("/reviews", reviewRoutes)
 
 /*
 |--------------------------------------------------------------------------
