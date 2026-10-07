@@ -1,5 +1,6 @@
 const Review = require("../Models/review.models");
 const Booking = require("../Models/booking.models");
+const User = require("../Models/user.models");
 
 
 // =====================================================
@@ -408,6 +409,53 @@ module.exports.updateReview = async (req, res) => {
       success: false,
       message:
         error.message || "Unable to update review.",
+    });
+  }
+};
+
+
+module.exports.getMyProviderProfile = async (req, res) => {
+  try {
+    const providerId =
+      req.user?._id ||
+      req.user?.id ||
+      req.user?.userId ||
+      req.user?.user_id;
+
+    if (!providerId) {
+      return res.status(401).json({
+        success: false,
+        message: "Provider authentication required.",
+      });
+    }
+
+    const provider = await User.findOne({
+      _id: providerId,
+      role: "provider",
+    }).select(
+      "-password -resetPasswordToken -resetPasswordExpires"
+    );
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      provider,
+    });
+  } catch (error) {
+    console.error(
+      "Get my provider profile error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch provider profile.",
     });
   }
 };

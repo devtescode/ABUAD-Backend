@@ -8,7 +8,8 @@ const {
   getCustomerReviews,
   getBookingReview,
   deleteReview,
-  updateReview
+  updateReview,
+  getMyProviderProfile
 } = require("../Controllers/review.controllers");
 
 const { verifyToken } = require("../middleware/auth");
@@ -22,7 +23,7 @@ router.post(
 );
 
 
-// Provider reviews
+// Provider reviews 
 router.get(
   "/provider/:providerId",
   getProviderReviews
@@ -55,6 +56,16 @@ router.put(
   verifyToken,
   updateReview
 );
+
+// Provider views own profile
+router.get(
+  "/my-profile",
+  verifyToken,
+  getMyProviderProfile
+);
+
+
+
 
 
 module.exports = router;
