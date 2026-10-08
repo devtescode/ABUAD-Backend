@@ -43,6 +43,10 @@ const reviewSchema = new mongoose.Schema(
       maxlength: 2000,
       default: "",
     },
+    isHidden: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

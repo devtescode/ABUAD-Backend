@@ -39,3 +39,53 @@ module.exports.getAllReviews = async (req, res) => {
     });
   }
 };
+
+
+// controllers/adminReviewController.js
+module.exports.hideReview = async (req, res) => {
+  try {
+    const review = await Review.findByIdAndUpdate(
+      req.params.id,
+      { isHidden: true },
+      { new: true }
+    ).populate("customer provider service");
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found.",
+      });
+    }
+
+    res.json({ success: true, review });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+module.exports.unhideReview = async (req, res) => {
+  try {
+    const review = await Review.findByIdAndUpdate(
+      req.params.id,
+      { isHidden: false },
+      { new: true }
+    ).populate("customer provider service");
+
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: "Review not found.",
+      });
+    }
+
+    res.json({ success: true, review });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
