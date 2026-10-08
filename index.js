@@ -15,11 +15,12 @@ const providerAccountRoutes = require("./Routes/providerAccountRoutes.routes");
 const paymentRoutes = require("./Routes/payment.routes");
 const bookingsRoutes = require("./Routes/booking.routes");
 const reviewRoutes = require("./Routes/review.routes");
+const AdminreviewRoutes = require("./Routes/adminreviews.routes");
 
 const app = express();
 const server = http.createServer(app);
 
-const PORT = process.env.PORT || 4500;
+const PORT = process.env.PORT || 5000;
 const URI = process.env.URI;
 
 /*
@@ -105,6 +106,8 @@ app.use("/provider-account", providerAccountRoutes);
 app.use("/bookings", bookingsRoutes)
 
 app.use("/reviews", reviewRoutes)
+
+app.use("/adminreviews", AdminreviewRoutes)
 
 /*
 |--------------------------------------------------------------------------

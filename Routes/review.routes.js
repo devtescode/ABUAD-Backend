@@ -9,7 +9,7 @@ const {
   getBookingReview,
   deleteReview,
   updateReview,
-  getMyProviderProfile
+  getMyProviderProfile,
 } = require("../Controllers/review.controllers");
 
 const { verifyToken } = require("../middleware/auth");
@@ -63,8 +63,6 @@ router.get(
   verifyToken,
   getMyProviderProfile
 );
-
-
 
 
 
