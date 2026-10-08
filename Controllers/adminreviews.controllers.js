@@ -7,11 +7,11 @@ module.exports.getAllReviews = async (req, res) => {
     const reviews = await Review.find({})
       .populate(
         "customer",
-        "name fullName email avatar profileImage"
+        "name fullName email phoneNumber avatar profileImage"
       )
       .populate(
         "provider",
-        "name fullName email avatar profileImage"
+        "name fullName email phoneNumber avatar profileImage"
       )
       .populate(
         "service",
