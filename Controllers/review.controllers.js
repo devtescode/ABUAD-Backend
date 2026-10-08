@@ -459,3 +459,306 @@ module.exports.getMyProviderProfile = async (req, res) => {
     });
   }
 };
+
+
+
+/* =========================================================
+   GET /reviews/recommended
+   
+   Returns the top N providers ranked by:
+     1. Rating (highest first)
+     2. Verified (verified before unverified on ties)
+     3. Review count (more first on further ties)
+     4. Completed bookings (more first)
+     5. Newest as final tiebreaker
+
+   Query params:
+     ?limit=4   (defaults to 4)
+========================================================= */
+
+
+
+module.exports.getRecommendedProviders = async (
+  req,
+  res
+) => {
+  try {
+    const limit = Math.min(
+      Number(req.query.limit) || 4,
+      20
+    );
+
+    const providers = await User.aggregate([
+      /* 1 — MATCH */
+      {
+        $match: {
+          role: "provider",
+          $or: [
+            { status: "active" },
+            { status: { $exists: false } },
+            { status: null },
+          ],
+        },
+      },
+
+      /* 2 — JOIN REVIEWS */
+      {
+        $lookup: {
+          from: "reviews",
+          localField: "_id",
+          foreignField: "provider",
+          as: "providerReviews",
+        },
+      },
+
+      /* 3 — JOIN SERVICES (NEW) */
+      {
+        $lookup: {
+          from: "services",
+          localField: "_id",
+          foreignField: "provider",
+          as: "providerServices",
+        },
+      },
+
+      /* 4 — COMPUTE RATING + REVIEW COUNT */
+      {
+        $addFields: {
+          liveRating: {
+            $cond: [
+              {
+                $gt: [
+                  {
+                    $size: {
+                      $filter: {
+                        input: "$providerReviews",
+                        as: "r",
+                        cond: {
+                          $ne: ["$$r.isHidden", true],
+                        },
+                      },
+                    },
+                  },
+                  0,
+                ],
+              },
+              {
+                $avg: {
+                  $map: {
+                    input: {
+                      $filter: {
+                        input: "$providerReviews",
+                        as: "r",
+                        cond: {
+                          $ne: ["$$r.isHidden", true],
+                        },
+                      },
+                    },
+                    as: "r",
+                    in: "$$r.rating",
+                  },
+                },
+              },
+              0,
+            ],
+          },
+
+          liveReviewCount: {
+            $size: {
+              $filter: {
+                input: "$providerReviews",
+                as: "r",
+                cond: { $ne: ["$$r.isHidden", true] },
+              },
+            },
+          },
+        },
+      },
+
+      /* 5 — COMPUTE effectiveRating + startingPrice (NEW) */
+      {
+        $addFields: {
+          effectiveRating: {
+            $let: {
+              vars: {
+                stored: { $ifNull: ["$rating", 0] },
+                live: "$liveRating",
+              },
+              in: {
+                $cond: [
+                  { $gt: ["$$live", 0] },
+                  "$$live",
+                  "$$stored",
+                ],
+              },
+            },
+          },
+
+          effectiveReviewCount: {
+            $cond: [
+              { $gt: ["$liveReviewCount", 0] },
+              "$liveReviewCount",
+              { $ifNull: ["$reviewCount", 0] },
+            ],
+          },
+
+          verifiedRank: {
+            $cond: [
+              { $eq: ["$verified", true] },
+              1,
+              0,
+            ],
+          },
+
+          /* ✅ Lowest active service price */
+          startingPrice: {
+            $let: {
+              vars: {
+                prices: {
+                  $map: {
+                    input: {
+                      $filter: {
+                        input: "$providerServices",
+                        as: "s",
+                        cond: {
+                          $and: [
+                            {
+                              $ne: [
+                                "$$s.status",
+                                "rejected",
+                              ],
+                            },
+                            {
+                              $ne: [
+                                "$$s.status",
+                                "paused",
+                              ],
+                            },
+                            {
+                              $gt: ["$$s.price", 0],
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    as: "s",
+                    in: "$$s.price",
+                  },
+                },
+              },
+              in: {
+                $cond: [
+                  { $gt: [{ $size: "$$prices" }, 0] },
+                  { $min: "$$prices" },
+                  { $ifNull: ["$hourlyRate", 0] },
+                ],
+              },
+            },
+          },
+
+          totalServices: {
+            $size: "$providerServices",
+          },
+        },
+      },
+
+      /* 6 — FILTER: only rated providers */
+      {
+        $match: {
+          effectiveRating: { $gt: 0 },
+        },
+      },
+
+      /* 7 — SORT: highest rating first */
+      {
+        $sort: {
+          effectiveRating: -1,
+          verifiedRank: -1,
+          effectiveReviewCount: -1,
+          completedBookings: -1,
+          createdAt: -1,
+        },
+      },
+
+      /* 8 — LIMIT */
+      { $limit: limit },
+
+      /* 9 — CLEANUP */
+      {
+        $unset: [
+          "providerReviews",
+          "providerServices",
+        ],
+      },
+
+      /* 10 — PROJECT (inclusion only) */
+      {
+        $project: {
+          _id: 1,
+          fullName: 1,
+          name: 1,
+          email: 1,
+          phone: 1,
+          avatar: 1,
+          profileImage: 1,
+
+          categories: 1,
+          bio: 1,
+          about: 1,
+          location: 1,
+
+          verified: 1,
+          status: 1,
+
+          rating: {
+            $round: ["$effectiveRating", 1],
+          },
+          reviewCount: "$effectiveReviewCount",
+          completedBookings: {
+            $ifNull: ["$completedBookings", 0],
+          },
+
+          hourlyRate: {
+            $ifNull: ["$hourlyRate", 0],
+          },
+
+          /* ✅ NEW */
+          startingPrice: 1,
+          totalServices: 1,
+
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      },
+    ]);
+
+    console.log(
+      "RECOMMENDED PROVIDERS RETURNED:",
+      providers.map((p, index) => ({
+        rank: index + 1,
+        name: p.fullName || p.name || "Unnamed",
+        rating: p.rating ?? 0,
+        reviewCount: p.reviewCount ?? 0,
+        startingPrice: p.startingPrice ?? 0,
+      }))
+    );
+
+    return res.status(200).json({
+      success: true,
+      count: providers.length,
+      providers,
+    });
+  } catch (error) {
+    console.error(
+      "GET RECOMMENDED PROVIDERS ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Unable to load recommended providers.",
+    });
+  }
+};

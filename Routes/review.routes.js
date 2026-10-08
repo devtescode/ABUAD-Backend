@@ -10,6 +10,7 @@ const {
   deleteReview,
   updateReview,
   getMyProviderProfile,
+  getRecommendedProviders
 } = require("../Controllers/review.controllers");
 
 const { verifyToken } = require("../middleware/auth");
@@ -62,6 +63,12 @@ router.get(
   "/my-profile",
   verifyToken,
   getMyProviderProfile
+);
+
+router.get(
+  "/recommended",
+  // verifyToken,
+  getRecommendedProviders
 );
 
 
