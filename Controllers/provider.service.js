@@ -1,6 +1,8 @@
+const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const User = require("../Models/user.models");
 const Service = require("../Models/service.models");
+const Review = require("../Models/review.models");
 const cloudinary = require("../config/cloudinary");
 dotenv.config();
 
@@ -579,3 +581,113 @@ module.exports.geteachProviderProfile = async (req, res) => {
 };
 
 
+
+
+
+module.exports.ProviderProfiledetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "Provider ID is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid provider ID",
+      });
+    }
+
+    const provider = await User.findById(id).select(
+      "name fullName email phone avatar profileImage about bio location " +
+        "status role verified categories rating reviewCount completedBookings " +
+        "hourlyRate createdAt updatedAt availability"
+    );
+
+    if (!provider) {
+      return res.status(404).json({
+        success: false,
+        message: "Provider not found",
+      });
+    }
+
+    if (provider.role !== "provider") {
+      return res.status(400).json({
+        success: false,
+        message: "The selected user is not a provider",
+      });
+    }
+
+    /* =====================================================
+       COMPUTE RATING LIVE FROM REVIEWS
+
+       This guarantees the dashboard always shows the
+       correct average, even if the stored `rating` on
+       the user doc is stale or 0.
+    ===================================================== */
+    const ratingStats = await Review.aggregate([
+      {
+        $match: {
+          provider: new mongoose.Types.ObjectId(id),
+          // exclude admin-hidden reviews
+          isHidden: { $ne: true },
+        },
+      },
+      {
+        $group: {
+          _id: "$provider",
+          averageRating: { $avg: "$rating" },
+          reviewCount: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const {
+      averageRating = 0,
+      reviewCount = 0,
+    } = ratingStats[0] || {};
+
+    const liveRating = Number(
+      Number(averageRating).toFixed(1)
+    );
+
+    console.log(
+      `📊 Provider ${id} rating: ${liveRating} from ${reviewCount} reviews`
+    );
+
+    const services = await Service.find({
+      provider: provider._id,
+    }).sort({ createdAt: -1 });
+
+    /* =====================================================
+       MERGE LIVE RATING INTO PROVIDER RESPONSE
+    ===================================================== */
+    const providerObject = provider.toObject();
+
+    return res.status(200).json({
+      success: true,
+      provider: {
+        ...providerObject,
+        // ✅ overwrite with the live computed values
+        rating: liveRating,
+        averageRating: liveRating,
+        reviewCount,
+      },
+      services,
+    });
+  } catch (error) {
+    console.error(
+      "Get provider profile error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch provider profile",
+    });
+  }
+};

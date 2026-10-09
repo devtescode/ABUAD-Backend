@@ -732,16 +732,16 @@ module.exports.getRecommendedProviders = async (
       },
     ]);
 
-    console.log(
-      "RECOMMENDED PROVIDERS RETURNED:",
-      providers.map((p, index) => ({
-        rank: index + 1,
-        name: p.fullName || p.name || "Unnamed",
-        rating: p.rating ?? 0,
-        reviewCount: p.reviewCount ?? 0,
-        startingPrice: p.startingPrice ?? 0,
-      }))
-    );
+    // console.log(
+    //   "RECOMMENDED PROVIDERS RETURNED:",
+    //   providers.map((p, index) => ({
+    //     rank: index + 1,
+    //     name: p.fullName || p.name || "Unnamed",
+    //     rating: p.rating ?? 0,
+    //     reviewCount: p.reviewCount ?? 0,
+    //     startingPrice: p.startingPrice ?? 0,
+    //   }))
+    // );
 
     return res.status(200).json({
       success: true,

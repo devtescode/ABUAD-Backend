@@ -1,5 +1,5 @@
 const express = require("express")
-const { providerservice, getProviderServices, updateProviderService, deleteProviderService, getApprovedServices, getProviderProfile, geteachProviderProfile } = require("../Controllers/provider.service")
+const { providerservice, getProviderServices, updateProviderService, deleteProviderService, getApprovedServices, getProviderProfile, geteachProviderProfile, ProviderProfiledetails } = require("../Controllers/provider.service")
 const { getProviderAvailability, updateProviderAvailability, } = require("../Controllers/provider.avaliability");
 const router = express.Router()
 const upload = require("../middleware/upload");
@@ -20,7 +20,7 @@ router.put( "/services/:id",
 verifyToken, 
 upload.single("image"), 
 updateProviderService);
-
+    
 router.delete( "/services/:id", 
 verifyToken, 
 deleteProviderService);
@@ -36,6 +36,8 @@ getProviderProfile );
 
 
 router.get("/eachprofile/:id", geteachProviderProfile)
+
+router.get("/eachprofiledetails/:id", ProviderProfiledetails)
 
 
 router.get(
