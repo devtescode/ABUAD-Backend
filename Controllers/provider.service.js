@@ -655,9 +655,9 @@ module.exports.ProviderProfiledetails = async (req, res) => {
       Number(averageRating).toFixed(1)
     );
 
-    console.log(
-      `📊 Provider ${id} rating: ${liveRating} from ${reviewCount} reviews`
-    );
+    // console.log(
+    //   `📊 Provider ${id} rating: ${liveRating} from ${reviewCount} reviews`
+    // );
 
     const services = await Service.find({
       provider: provider._id,
